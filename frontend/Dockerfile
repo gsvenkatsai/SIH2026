@@ -1,20 +1,18 @@
-# Stage 1: Build React static bundle
-FROM node:20-alpine AS builder
+FROM node:20-alpine
 
 WORKDIR /app
 
+# Install npm packages
 COPY package.json package-lock.json ./
 RUN npm ci
 
+# Copy frontend source code
 COPY . .
+
+# Build production React app
 RUN npm run build
-
-# Stage 2: Serve using Nginx
-FROM nginx:alpine
-
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=builder /app/dist /usr/share/nginx/html
 
 EXPOSE 5173
 
-CMD ["nginx", "-g", "daemon off;"]
+# Serve production React app on port 5173 with SPA fallback (-s)
+CMD ["npx", "serve", "-s", "dist", "-l", "5173"]

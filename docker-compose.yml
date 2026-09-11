@@ -8,9 +8,9 @@ services:
       - "8005:8005"
     environment:
       - GROQ_API_KEY=${GROQ_API_KEY}
-      - DATABASE_URL=sqlite:///./medikiosk.db
+      - DATABASE_URL=sqlite:///./data/medikiosk.db
     volumes:
-      - ./backend/medikiosk.db:/app/medikiosk.db
+      - ./backend/data:/app/data
       - ./backend/uploads:/app/uploads
     restart: unless-stopped
 

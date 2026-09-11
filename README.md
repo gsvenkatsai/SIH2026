@@ -15,17 +15,26 @@ The system synthesizes both data sources into a source-tagged clinical snapshot 
 - A **Groq API Key** (a default fallback key is included in `.env`, or export your own).
 
 ### 🚀 Launch with a Single Command
-In your terminal, clone the repository and run:
 
-```bash
-docker compose up --build
+#### On Windows (CMD or PowerShell):
+Double-click `run_app.bat` or run in terminal:
+```cmd
+run_app.bat
 ```
-*(or run `./run_app.sh`)*
+*(or run `docker compose up --build`)*
+
+#### On Linux / macOS:
+```bash
+./run_app.sh
+```
+*(or run `docker compose up --build`)*
 
 That's it! Once containers finish starting:
 - 💻 **Open Web Kiosk App**: [http://localhost:5173](http://localhost:5173)
 - ⚙️ **Backend API**: [http://localhost:8005](http://localhost:8005)
 - 📚 **Swagger API Docs**: [http://localhost:8005/docs](http://localhost:8005/docs)
+
+> 💡 **Windows Troubleshooting Note:** Ensure **Docker Desktop for Windows** is running with **WSL 2 backend** enabled. If using PowerShell, run as Administrator if port permissions are restricted.
 
 ---
 
