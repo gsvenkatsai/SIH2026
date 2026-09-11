@@ -1,0 +1,160 @@
+================================================================================
+                    MEDIKIOSK — BUILD SUMMARY & ARCHITECTURE DOCUMENT
+================================================================================
+Generated Date: September 11, 2026
+Project Name: MediKiosk (Local Demo Prototype)
+Repository Path: /home/venkatsaigs/Projects/SIH2026/Codeholics
+
+--------------------------------------------------------------------------------
+1. PROJECT PURPOSE & CORE DESIGN PHILOSOPHY
+--------------------------------------------------------------------------------
+MediKiosk is a kiosk-based patient history taking & clinical verification platform.
+Before seeing a physician, patients answer an adaptive intake interview guided by clinical
+decision trees and upload previous medical documents (prescriptions, lab reports). 
+The backend automatically synthesizes both data sources into a structured clinical snapshot.
+
+NON-NEGOTIABLE DESIGN RULE:
+  "AI collects and organizes. Doctor verifies and decides.
+   Every fact MUST carry an explicit source tag (🎤 interview / 📄 document)."
+
+--------------------------------------------------------------------------------
+2. SYSTEM ARCHITECTURE & TECH STACK
+--------------------------------------------------------------------------------
+Layer           Technology Chosen
+--------------------------------------------------------------------------------
+Frontend        React 18 + Vite (Vanilla CSS, Glassmorphism Design System)
+Backend         Python 3.13 + FastAPI + Uvicorn
+Database        SQLite (medikiosk.db) via SQLAlchemy ORM
+LLM & AI        Groq API (Model: groq/compound-mini)
+Deployment      Localhost Only
+Frontend Port   http://localhost:5173
+Backend Port    http://localhost:8005 (Docs: http://localhost:8005/docs)
+
+--------------------------------------------------------------------------------
+3. DATABASE SCHEMA (SQLite - app/models.py)
+--------------------------------------------------------------------------------
+1. patients
+   - id (INTEGER, PK)
+   - name (VARCHAR)
+   - language (VARCHAR)
+   - created_at (DATETIME)
+
+2. visits
+   - id (INTEGER, PK)
+   - patient_id (INTEGER, FK -> patients.id)
+   - chief_complaint (TEXT)
+   - status (VARCHAR: 'draft', 'reviewed', 'approved')
+   - created_at (DATETIME)
+
+3. interview_responses
+   - id (INTEGER, PK)
+   - visit_id (INTEGER, FK -> visits.id)
+   - question_id (VARCHAR)
+   - question (TEXT)
+   - answer (TEXT)
+   - timestamp (DATETIME)
+
+4. documents
+   - id (INTEGER, PK)
+   - visit_id (INTEGER, FK -> visits.id)
+   - image_path (VARCHAR)
+   - filename (VARCHAR)
+   - extracted_json (JSON)
+   - confidence (FLOAT)
+   - created_at (DATETIME)
+
+5. final_record
+   - id (INTEGER, PK)
+   - visit_id (INTEGER, FK -> visits.id, UNIQUE)
+   - structured_json (JSON: source-tagged facts, flags, summaries)
+   - approved_by_doctor (BOOLEAN)
+   - doctor_notes (TEXT)
+   - created_at (DATETIME)
+   - updated_at (DATETIME)
+
+--------------------------------------------------------------------------------
+4. GROQ LLM SERVICE & PROMPTS (app/groq_service.py)
+--------------------------------------------------------------------------------
+The application implements 3 specialized Groq prompts:
+
+1. Interview Question Generator Prompt (generate_interview_question):
+   - Input: Chief complaint, target decision tree question, prior Q&A history.
+   - Constraint: Must pick strictly from decision tree branches (Chest Pain, Fever, Cough,
+     General); forbidden from inventing unapproved medical branches.
+   - Function: Formulates empathic, natural phrasing tailored to patient context.
+
+2. Document OCR & Extractor Prompt (extract_document_info):
+   - Input: Medical report/prescription file details & base64/text.
+   - Output: Structured JSON containing diagnoses, medications, lab values, dates,
+     and an overall confidence score (0.0 - 1.0).
+
+3. Record Synthesis & Flagging Engine (merge_record_and_flag):
+   - Input: Interview responses JSON + Extracted documents JSON.
+   - Function: 
+     a. Tags every fact as "interview" (🎤) or "document" (📄).
+     b. Detects Contradiction Flags (discrepancies between patient answers and docs).
+     c. Detects Attention Flags (high-risk symptom combinations).
+     d. Phrases all flags as "recommend prompt clinical assessment", NEVER as a diagnosis.
+
+--------------------------------------------------------------------------------
+5. BACKEND API ENDPOINTS (app/routes/)
+--------------------------------------------------------------------------------
+Module               Endpoint               Description
+--------------------------------------------------------------------------------
+interview.py         POST /interview/start  Creates patient & visit, returns first Q
+interview.py         POST /interview/answer Stores response, returns next Q or 'complete'
+document.py          POST /document/extract Uploads doc image, runs Groq OCR extraction
+record.py            POST /record/finalize  Merges interview & doc facts with tags/flags
+doctor.py            GET  /doctor/queue     Lists pending visits with status & doc count
+doctor.py            GET  /doctor/patient/{id} Fetches full structured patient record
+doctor.py            POST /doctor/approve   Applies doctor edits/notes & approves record
+
+--------------------------------------------------------------------------------
+6. FRONTEND APPLICATION STRUCTURE (frontend/src/)
+--------------------------------------------------------------------------------
+File                               Description
+--------------------------------------------------------------------------------
+index.html                         Includes Google Fonts (Outfit, Inter) & SEO meta
+index.css                          Design tokens, glassmorphic cards, badges, scrollbars
+api.js                             Centralized API wrapper functions fetching localhost:8005
+App.jsx                            Root state manager (Patient Flow vs Doctor Portal)
+components/RoleSelect.jsx          Role entry screen (Patient Kiosk vs Doctor Dashboard)
+components/LanguageSelect.jsx      Language choice (Kannada, Hindi, English)
+components/ChiefComplaint.jsx      Symptom capture with quick selection chips
+components/AdaptiveInterview.jsx   Q&A intake screen with progress bar & voice simulation
+components/DocumentUpload.jsx      Drag-and-drop document upload & extraction review
+components/PatientSummary.jsx      Patient intake confirmation with source tags
+components/DoctorQueue.jsx         Physician queue table with status badges
+components/DoctorPatientView.jsx   Doctor deep-dive view with tags, flags, notes & sign-off
+
+--------------------------------------------------------------------------------
+7. VERIFICATION & TESTING RESULTS
+--------------------------------------------------------------------------------
+1. Unit Integration Test (test_backend.py):
+   - Verified schema creation, SQLite session handling, and API stubs.
+   - Result: 100% PASS.
+
+2. Live System Test (test_live_system.py):
+   - Simulated full clinical workflow against live running FastAPI server on port 8005.
+   - Created patient visit, answered adaptive questions, extracted medical document facts,
+     finalized source-tagged record with attention flags, loaded doctor queue, and completed
+     physician verification & sign-off.
+   - Result: 100% PASS.
+
+3. Frontend Build Test (npm run build):
+   - Compiled React bundle using Vite without warnings or errors.
+   - Result: 100% PASS (dist/ bundle created in 127ms).
+
+--------------------------------------------------------------------------------
+8. HOW TO RUN THE APPLICATION
+--------------------------------------------------------------------------------
+Backend:
+  cd backend
+  ./venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8005
+
+Frontend:
+  cd frontend
+  npm run dev -- --host 0.0.0.0 --port 5173
+
+Access URL: http://localhost:5173
+================================================================================
