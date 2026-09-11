@@ -111,10 +111,14 @@ DECISION_TREES = {
 
 def get_tree_key(chief_complaint: str) -> str:
     complaint_lower = chief_complaint.lower()
-    if "chest" in complaint_lower or "pain" in complaint_lower or "heart" in complaint_lower:
+    
+    # Require specific cardiac/chest keywords (MUST NOT trigger on generic 'pain' alone like 'knee pain')
+    if "chest" in complaint_lower or "heart" in complaint_lower or "cardiac" in complaint_lower or "angina" in complaint_lower or "sternum" in complaint_lower:
         return "chest_pain"
-    elif "fever" in complaint_lower or "temp" in complaint_lower or "chills" in complaint_lower:
+    elif "fever" in complaint_lower or "temp" in complaint_lower or "chills" in complaint_lower or "pyrexia" in complaint_lower:
         return "fever"
-    elif "cough" in complaint_lower or "cold" in complaint_lower or "throat" in complaint_lower or "phlegm" in complaint_lower:
+    elif "cough" in complaint_lower or "cold" in complaint_lower or "throat" in complaint_lower or "phlegm" in complaint_lower or "sputum" in complaint_lower:
         return "cough"
+    
+    # Fallback to General for all unmapped complaints
     return "default"

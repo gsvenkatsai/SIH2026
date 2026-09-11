@@ -69,7 +69,19 @@ def test_full_flow():
     assert app_data["status"] == "approved"
     print("✓ Doctor approve passed")
 
-    print("\n🎉 ALL BACKEND ENDPOINTS AND DATABASE MODELS ARE 100% WORKING!")
+def test_knee_pain_routing():
+    # Test routing for "knee pain" -> should get General tree question (gen_*), NOT chest pain question (cp_*)
+    res = client.post("/interview/start", json={
+        "chief_complaint": "knee pain",
+        "patient_name": "Knee Pain Test Patient",
+        "language": "English"
+    })
+    assert res.status_code == 200, res.text
+    data = res.json()
+    q_id = data["question_id"]
+    assert q_id.startswith("gen_"), f"Expected question from General tree (gen_*), but got '{q_id}'"
+    print(f"✓ Knee Pain routing test passed: 'knee pain' successfully routed to General decision tree (question_id: '{q_id}')")
 
 if __name__ == "__main__":
+    test_knee_pain_routing()
     test_full_flow()
