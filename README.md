@@ -260,8 +260,9 @@ Every patient intake maps to the standardized clinical framework:
 - Prompts immediate emergency triage notifications (`CRITICAL_RED_FLAG`) and allows immediate intake shortening to expedite physician review.
 
 ### 4. ⚡ Tiered LLM Architecture
-- **Dialogue & Slot Extraction**: Powered by `llama-3.1-8b-instant` for sub-second response times and token efficiency during live kiosk interactions.
-- **Clinical EHR Synthesis**: Powered by `llama-3.3-70b-versatile` for high-depth evidence synthesis, cross-document reconciliation, and contradiction detection.
+- **Dialogue & Slot Extraction**: Powered by `openai/gpt-oss-20b` for sub-second response times and token efficiency during live kiosk interactions.
+- **Clinical EHR Synthesis**: Powered by `openai/gpt-oss-120b` for high-depth evidence synthesis, cross-document reconciliation, and contradiction detection.
+- Model IDs are overridable via `GROQ_FAST_MODEL` / `GROQ_SYNTHESIS_MODEL` env vars (Groq retires models periodically — if a model 404s, update these).
 
 ### 5. 🔄 Audit Trail & Verbal Self-Contradiction Detection
 - When a patient updates a symptom report during intake (e.g. initial pain reported as *2/10*, later escalated to *9/10*), the system preserves timestamped revision history.

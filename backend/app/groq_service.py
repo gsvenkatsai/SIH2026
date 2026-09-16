@@ -15,11 +15,11 @@ load_dotenv()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 # Model Tiering Architecture:
-# 1. FAST_MODEL_NAME: Ultra-low latency (~200ms), high rate-limit ceiling for real-time interview slot filling and question generation
-FAST_MODEL_NAME = os.getenv("GROQ_FAST_MODEL", "llama-3.1-8b-instant")
+# 1. FAST_MODEL_NAME: Ultra-low latency, high rate-limit ceiling for real-time interview slot filling and question generation
+FAST_MODEL_NAME = os.getenv("GROQ_FAST_MODEL", "openai/gpt-oss-20b")
 
 # 2. SYNTHESIS_MODEL_NAME: High-capacity clinical reasoning model for multi-document EHR synthesis & doctor final record compilation
-SYNTHESIS_MODEL_NAME = os.getenv("GROQ_SYNTHESIS_MODEL", "llama-3.3-70b-versatile")
+SYNTHESIS_MODEL_NAME = os.getenv("GROQ_SYNTHESIS_MODEL", "openai/gpt-oss-120b")
 
 # Default alias for backwards compatibility
 MODEL_NAME = FAST_MODEL_NAME

@@ -17,9 +17,14 @@ from app.groq_service import (
 )
 
 def test_tiered_model_configuration():
-    """Verify that distinct models are tiered for fast dialogue vs deep synthesis."""
-    assert FAST_MODEL_NAME == "llama-3.1-8b-instant", f"Expected fast model llama-3.1-8b-instant, got {FAST_MODEL_NAME}"
-    assert SYNTHESIS_MODEL_NAME == "llama-3.3-70b-versatile", f"Expected synthesis model llama-3.3-70b-versatile, got {SYNTHESIS_MODEL_NAME}"
+    """Verify that distinct models are tiered for fast dialogue vs deep synthesis.
+
+    Defaults track Groq's current model catalog (the legacy llama-3.1/3.3 IDs
+    were retired upstream and returned model_not_found); both remain overridable
+    via GROQ_FAST_MODEL / GROQ_SYNTHESIS_MODEL env vars.
+    """
+    assert FAST_MODEL_NAME == "openai/gpt-oss-20b", f"Expected fast model openai/gpt-oss-20b, got {FAST_MODEL_NAME}"
+    assert SYNTHESIS_MODEL_NAME == "openai/gpt-oss-120b", f"Expected synthesis model openai/gpt-oss-120b, got {SYNTHESIS_MODEL_NAME}"
     assert FAST_MODEL_NAME != SYNTHESIS_MODEL_NAME, "Fast and synthesis models should be tiered separately"
 
 def test_empty_socrates_state_has_history():
