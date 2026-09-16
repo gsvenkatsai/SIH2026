@@ -1,5 +1,8 @@
-import React, { useState, useRef } from 'react';
-import { apiAnswerInterviewVoice } from '../api';
+import React, { useEffect, useRef, useState } from 'react';
+import { apiTranscribeVoice } from '../api';
+import { useLanguage } from '../i18n';
+import { useVoiceRecorder, VOICE_STATE } from '../hooks/useVoiceRecorder';
+import { useTextToSpeech } from '../hooks/useTextToSpeech';
 
 const SOCRATES_SCHEMA = [
   { key: 'site', alias: 'site', label: 'Site', letter: 'S' },
@@ -13,8 +16,8 @@ const SOCRATES_SCHEMA = [
 ];
 
 export default function AdaptiveInterview({
-  visitId,
-  selectedLanguage = 'English',
+  visitId: _visitId, // reserved for future in-session resume; not needed by this component
+  selectedLanguage: _selectedLanguage, // language flows through the i18n context now
   currentQuestion,
   questionId,
   qaHistory,
@@ -28,98 +31,92 @@ export default function AdaptiveInterview({
   onFinishInterview,
   isLoading
 }) {
+  const { t, config } = useLanguage();
   const [answer, setAnswer] = useState('');
-  const [isRecording, setIsRecording] = useState(false);
-  const [isTranscribing, setIsTranscribing] = useState(false);
-  const [voiceError, setVoiceError] = useState('');
-  const [voiceSuccess, setVoiceSuccess] = useState('');
+  const [voiceError, setVoiceError] = useState(null); // i18n key
+  const [transcript, setTranscript] = useState(''); // confirmed-then-committed transcript
+  const [editMode, setEditMode] = useState(false);
+  const lastConfidenceRef = useRef(0);
+  const hasAutoSpokenRef = useRef('');
 
-  const mediaRecorderRef = useRef(null);
-  const audioChunksRef = useRef([]);
-  const mediaStreamRef = useRef(null);
+  const recorder = useVoiceRecorder({
+    onRecordingStopped: (blob) => {
+      // Audio stopped → upload to backend ASR (browser never sees the Groq key).
+      handleTranscribe(blob);
+    }
+  });
+
+  const tts = useTextToSpeech(config.code);
+
+  const handleTranscribe = async (blob) => {
+    setVoiceError(null);
+    recorder.setBusy();
+    try {
+      const result = await apiTranscribeVoice(blob, config.code);
+      if (!result.transcript || !result.transcript.trim()) {
+        setVoiceError('mic.emptyRecording');
+        recorder.reset();
+        return;
+      }
+      setTranscript(result.transcript);
+      setEditMode(false);
+      lastConfidenceRef.current = result.confidence || 0;
+      // PRD audio confirmation: speak the transcript back to the patient.
+      tts.speak(`${t('interview.youSaid')} ${result.transcript}`, { force: true });
+    } catch (err) {
+      setVoiceError(err.kind || 'mic.transcriptionFailed');
+      recorder.reset();
+    }
+  };
+
+  const confirmTranscript = () => {
+    // Commit: transcript becomes the answer through the SAME clinical pipeline as typing.
+    onAnswer(questionId, transcript, false, {
+      language: config.code,
+      original_transcript: transcript,
+      confidence: lastConfidenceRef.current
+    });
+    setTranscript('');
+    setAnswer('');
+    setVoiceError(null);
+    recorder.reset();
+  };
+
+  const retryRecording = () => {
+    setTranscript('');
+    setVoiceError(null);
+    recorder.reset();
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!answer.trim()) return;
-    onAnswer(questionId, answer);
+    onAnswer(questionId, answer, false, null);
     setAnswer('');
-    setVoiceSuccess('');
-    setVoiceError('');
+    setVoiceError(null);
+    recorder.reset();
   };
 
-  const startRecording = async () => {
-    setVoiceError('');
-    setVoiceSuccess('');
-    try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        setVoiceError('Microphone access is not supported in this browser. Please type your response manually.');
-        return;
-      }
+  // Auto-speak each new question once — guarded against re-renders/StrictMode.
+  const speakRef = useRef(null);
+  useEffect(() => {
+    speakRef.current = tts;
+  }, [tts]);
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaStreamRef.current = stream;
+  useEffect(() => {
+    if (!currentQuestion || !tts.available) return;
+    if (hasAutoSpokenRef.current === currentQuestion) return;
+    hasAutoSpokenRef.current = currentQuestion;
+    const timer = setTimeout(() => speakRef.current?.speak(currentQuestion), 350);
+    return () => clearTimeout(timer);
+  }, [currentQuestion, tts.available]);
 
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
+  // Re-speak when the patient switches language mid-interview.
+  useEffect(() => {
+    hasAutoSpokenRef.current = '';
+  }, [config.code]);
 
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data && event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      };
-
-      mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        await handleAudioUpload(audioBlob);
-      };
-
-      mediaRecorder.start();
-      setIsRecording(true);
-    } catch (err) {
-      console.error('Microphone error:', err);
-      setVoiceError('Microphone permission denied or device not found. Please type your response manually below.');
-      setIsRecording(false);
-    }
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
-    }
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
-    }
-    setIsRecording(false);
-  };
-
-  const handleAudioUpload = async (audioBlob) => {
-    try {
-      setIsTranscribing(true);
-      const result = await apiAnswerInterviewVoice(visitId, questionId, audioBlob, selectedLanguage);
-      if (result && result.transcript) {
-        setAnswer(result.transcript);
-        setVoiceSuccess(`Transcribed via Groq Whisper-large-v3 (${selectedLanguage}). Please review or edit before submitting.`);
-      } else {
-        setVoiceError('No speech recognized in recording. Please type your answer manually.');
-      }
-    } catch (err) {
-      console.error('Groq Whisper error:', err);
-      setVoiceError(`Voice transcription error (${err.message || 'Groq API failure'}). Please type your response manually below.`);
-    } finally {
-      setIsTranscribing(false);
-    }
-  };
-
-  const toggleMic = () => {
-    if (isRecording) {
-      stopRecording();
-    } else {
-      startRecording();
-    }
-  };
-
-  const filledCount = SOCRATES_SCHEMA.filter(dim => {
+  const filledCount = SOCRATES_SCHEMA.filter((dim) => {
     const slot = socratesState?.[dim.key] || socratesState?.[dim.alias];
     return slot && slot.value && slot.value !== 'Not reported' && slot.value !== 'None';
   }).length;
@@ -128,6 +125,11 @@ export default function AdaptiveInterview({
     Math.min(((qaHistory.length + 1) / 5) * 100, 100),
     Math.round((filledCount / 8) * 100)
   );
+
+  const vs = recorder.state;
+  const isRecording = vs === VOICE_STATE.RECORDING;
+  const isBusy = vs === VOICE_STATE.REQUESTING || vs === VOICE_STATE.UPLOADING || vs === VOICE_STATE.TRANSCRIBING;
+  const isTranscribed = vs === VOICE_STATE.TRANSCRIBED && transcript;
 
   return (
     <div style={{ maxWidth: '720px', margin: '2rem auto' }}>
@@ -144,45 +146,24 @@ export default function AdaptiveInterview({
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
             <span style={{ fontSize: '2rem' }}>🚨</span>
             <div style={{ flex: 1 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-                <strong style={{ color: '#fee2e2', fontSize: '1.1rem', letterSpacing: '0.3px' }}>
-                  EMERGENCY RED FLAG: Potential Acute Coronary Syndrome
-                </strong>
-                <span style={{
-                  background: '#ef4444',
-                  color: '#ffffff',
-                  fontSize: '0.72rem',
-                  padding: '0.2rem 0.6rem',
-                  borderRadius: '999px',
-                  fontWeight: 700,
-                  textTransform: 'uppercase'
-                }}>
-                  Emergency Triage Alert
-                </span>
-              </div>
+              <strong style={{ color: '#fee2e2', fontSize: '1.1rem', letterSpacing: '0.3px' }}>
+                {t('redflag.title')}
+              </strong>
               <p style={{ color: '#fecaca', fontSize: '0.88rem', lineHeight: 1.45, marginBottom: '0.85rem' }}>
-                {triageMessage || 'High-risk cardiac presentation detected (crushing chest pain radiating to left arm/jaw with autonomic distress or severe pain >= 7). Clinical triage staff have been prioritized.'}
+                {triageMessage || t('redflag.title')}
               </p>
               {canShorten && onShortenIntake && (
-                <button
-                  type="button"
-                  onClick={onShortenIntake}
-                  style={{
-                    background: '#dc2626',
-                    color: '#ffffff',
-                    border: '1px solid #f87171',
-                    padding: '0.55rem 1.1rem',
-                    borderRadius: 'var(--radius-md)',
-                    fontWeight: 700,
-                    fontSize: '0.9rem',
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    boxShadow: '0 4px 12px rgba(220, 38, 38, 0.4)'
-                  }}
-                >
-                  ⚡ Expedite Intake — Move Immediately to Doctor Review →
+                <button type="button" onClick={onShortenIntake} style={{
+                  background: '#dc2626',
+                  color: '#ffffff',
+                  border: '1px solid #f87171',
+                  padding: '0.55rem 1.1rem',
+                  borderRadius: 'var(--radius-md)',
+                  fontWeight: 700,
+                  fontSize: '0.9rem',
+                  cursor: 'pointer'
+                }}>
+                  {t('redflag.expedite')}
                 </button>
               )}
             </div>
@@ -194,10 +175,10 @@ export default function AdaptiveInterview({
       <div className="glass-card" style={{ marginBottom: '1.5rem', padding: '1.25rem 2rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--accent-cyan)' }}>
-            ADAPTIVE AI INTERVIEW — QUESTION #{qaHistory.length + 1} ({selectedLanguage})
+            {t('interview.header', { n: qaHistory.length + 1, lang: config.native })}
           </span>
           <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-            {qaHistory.length} Answered
+            {t('interview.answered', { n: qaHistory.length })}
           </span>
         </div>
         <div className="progress-bar-bg" style={{ marginTop: '0.6rem' }}>
@@ -208,18 +189,14 @@ export default function AdaptiveInterview({
         <div style={{ marginTop: '1rem', paddingTop: '0.85rem', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
             <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>
-              SOCRATES Clinical Protocol Tracker
+              {t('interview.tracker')}
             </span>
             <span style={{ fontSize: '0.8rem', fontWeight: 600, color: filledCount >= 6 ? 'var(--accent-emerald)' : 'var(--accent-cyan)' }}>
-              {filledCount}/8 Dimensions Captured ({progressPercent}%)
+              {t('interview.dimensions', { filled: filledCount, pct: progressPercent })}
             </span>
           </div>
 
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(8, 1fr)',
-            gap: '0.35rem'
-          }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: '0.35rem' }}>
             {SOCRATES_SCHEMA.map((dim) => {
               const slot = socratesState?.[dim.key] || socratesState?.[dim.alias];
               const isFilled = Boolean(slot && slot.value && slot.value !== 'Not reported' && slot.value !== 'None');
@@ -249,23 +226,9 @@ export default function AdaptiveInterview({
               }
 
               return (
-                <div
-                  key={dim.key}
-                  title={isFilled ? `${dim.label}: ${slot.value}` : `${dim.label} (unfilled)`}
-                  style={{
-                    background: bg,
-                    border: border,
-                    borderRadius: '6px',
-                    padding: '0.35rem 0.2rem',
-                    textAlign: 'center',
-                    transition: 'all 0.2s ease',
-                    cursor: 'default'
-                  }}
-                >
-                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: color }}>
-                    {icon} {dim.letter}
-                  </div>
-                  <div style={{ fontSize: '0.62rem', color: color, marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <div key={dim.key} style={{ background: bg, border: border, borderRadius: '6px', padding: '0.35rem 0.2rem', textAlign: 'center', cursor: 'default' }}>
+                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color }}>{icon} {dim.letter}</div>
+                  <div style={{ fontSize: '0.62rem', color, marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {dim.label}
                   </div>
                 </div>
@@ -278,25 +241,36 @@ export default function AdaptiveInterview({
       {/* Current Question Box */}
       <div className="glass-card" style={{ marginBottom: '1.5rem' }}>
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
-          <div style={{
-            fontSize: '1.8rem',
-            background: 'rgba(99, 102, 241, 0.15)',
-            padding: '0.6rem 0.9rem',
-            borderRadius: 'var(--radius-md)'
-          }}>
+          <div style={{ fontSize: '1.8rem', background: 'rgba(99, 102, 241, 0.15)', padding: '0.6rem 0.9rem', borderRadius: 'var(--radius-md)' }}>
             🤖
           </div>
           <div style={{ flex: 1 }}>
             <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.4rem', fontWeight: 600, color: '#f1f5f9', marginBottom: '0.5rem' }}>
               {currentQuestion}
             </h3>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              Source-tagged to clinical decision tree • Voice input via Groq Whisper-large-v3
-            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{t('interview.sourceNote')}</span>
+              {tts.available ? (
+                <>
+                  <button type="button" className="btn btn-outline" style={{ padding: '0.3rem 0.8rem', fontSize: '0.8rem' }}
+                    onClick={() => tts.replay(currentQuestion)}>
+                    {t('interview.repeat')}
+                  </button>
+                  {tts.speaking && (
+                    <button type="button" className="btn btn-outline" style={{ padding: '0.3rem 0.8rem', fontSize: '0.8rem' }}
+                      onClick={tts.stop}>
+                      {t('interview.stopAudio')}
+                    </button>
+                  )}
+                </>
+              ) : (
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-subtle)' }}>{t('interview.ttsUnavailable')}</span>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Error / Fallback Alert Banner */}
+        {/* Voice error banner — patient-friendly, translated, no internal API details */}
         {voiceError && (
           <div style={{
             background: 'rgba(244, 63, 94, 0.15)',
@@ -305,24 +279,70 @@ export default function AdaptiveInterview({
             padding: '0.8rem 1rem',
             borderRadius: 'var(--radius-md)',
             marginTop: '1rem',
-            fontSize: '0.88rem'
+            fontSize: '0.88rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '0.75rem',
+            flexWrap: 'wrap'
           }}>
-            ⚠️ {voiceError}
+            <span>⚠️ {t(voiceError)}</span>
+            <button type="button" className="btn btn-outline" style={{ padding: '0.25rem 0.7rem', fontSize: '0.8rem' }} onClick={retryRecording}>
+              {t('interview.retryRecording')}
+            </button>
           </div>
         )}
 
-        {/* Success Transcription Banner */}
-        {voiceSuccess && (
+        {/* Transcript confirmation card (PRD audio confirmation requirement) */}
+        {isTranscribed && !editMode && (
           <div style={{
-            background: 'rgba(16, 185, 129, 0.15)',
-            border: '1px solid rgba(16, 185, 129, 0.3)',
-            color: '#6ee7b7',
-            padding: '0.8rem 1rem',
+            background: 'rgba(16, 185, 129, 0.12)',
+            border: '1px solid rgba(16, 185, 129, 0.4)',
             borderRadius: 'var(--radius-md)',
-            marginTop: '1rem',
-            fontSize: '0.88rem'
+            padding: '1rem 1.1rem',
+            marginTop: '1rem'
           }}>
-            ✓ {voiceSuccess}
+            <div style={{ fontSize: '0.85rem', color: '#6ee7b7', fontWeight: 600, marginBottom: '0.3rem' }}>
+              {t('interview.transcribedVia', { lang: config.native })}
+            </div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+              {t('interview.youSaid')}
+            </div>
+            <div style={{ fontSize: '1.05rem', color: '#f1f5f9', lineHeight: 1.5, marginBottom: '0.9rem' }}>
+              “{transcript}”
+            </div>
+            <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+              <button type="button" className="btn btn-primary" style={{ padding: '0.5rem 1rem' }} onClick={confirmTranscript}>
+                {t('interview.confirmTranscript')}
+              </button>
+              <button type="button" className="btn btn-outline" style={{ padding: '0.5rem 1rem' }} onClick={() => setEditMode(true)}>
+                {t('interview.editTranscript')}
+              </button>
+              <button type="button" className="btn btn-outline" style={{ padding: '0.5rem 1rem' }} onClick={retryRecording}>
+                {t('interview.retryRecording')}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Editable transcript mode */}
+        {isTranscribed && editMode && (
+          <div style={{ marginTop: '1rem' }}>
+            <textarea
+              className="form-textarea"
+              rows={3}
+              value={transcript}
+              onChange={(e) => setTranscript(e.target.value)}
+              autoFocus
+            />
+            <div style={{ display: 'flex', gap: '0.6rem', marginTop: '0.6rem' }}>
+              <button type="button" className="btn btn-primary" style={{ padding: '0.5rem 1rem' }} onClick={confirmTranscript}>
+                {t('interview.confirmTranscript')}
+              </button>
+              <button type="button" className="btn btn-outline" style={{ padding: '0.5rem 1rem' }} onClick={() => setEditMode(false)}>
+                {t('interview.retryRecording')}
+              </button>
+            </div>
           </div>
         )}
 
@@ -333,63 +353,58 @@ export default function AdaptiveInterview({
               rows={3}
               value={answer}
               onChange={(e) => setAnswer(e.target.value)}
-              placeholder={`Type your response in ${selectedLanguage} (or click the microphone icon to record)...`}
+              placeholder={t('interview.typePlaceholder')}
               required
             />
 
-            {/* Real Mic Capture Button */}
-            <div style={{ position: 'absolute', right: '12px', bottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              {isTranscribing && (
-                <span style={{ fontSize: '0.78rem', color: 'var(--accent-cyan)' }}>
-                  Transcribing (Whisper)...
-                </span>
-              )}
+            {/* Mic button with full state machine visuals */}
+            <div style={{ position: 'absolute', right: '12px', bottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {isRecording && <span style={{ fontSize: '0.78rem', color: '#fda4af' }}>{t('interview.listening')}</span>}
+              {vs === VOICE_STATE.TRANSCRIBING && <span style={{ fontSize: '0.78rem', color: 'var(--accent-cyan)' }}>{t('interview.understanding')}</span>}
               <button
                 type="button"
-                onClick={toggleMic}
-                disabled={isTranscribing}
-                title={isRecording ? 'Click to stop recording & transcribe' : 'Click to start voice recording'}
+                onClick={() => (isRecording ? recorder.stopRecording() : recorder.startRecording())}
+                disabled={isBusy || isTranscribed}
+                aria-label={isRecording ? t('interview.stopAndTranscribe') : t('interview.tapToSpeak')}
+                title={isRecording ? t('interview.stopAndTranscribe') : t('interview.tapToSpeak')}
                 style={{
                   background: isRecording ? 'rgba(244, 63, 94, 0.35)' : 'rgba(99, 102, 241, 0.15)',
                   border: isRecording ? '2px solid var(--accent-rose)' : '1px solid var(--border-active)',
                   color: isRecording ? '#fda4af' : '#a5b4fc',
                   borderRadius: '50%',
-                  width: '42px',
-                  height: '42px',
-                  cursor: 'pointer',
+                  width: '46px',
+                  height: '46px',
+                  cursor: isBusy || isTranscribed ? 'not-allowed' : 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   transition: 'all 0.2s ease',
-                  boxShadow: isRecording ? '0 0 12px rgba(244, 63, 94, 0.6)' : 'none'
+                  boxShadow: isRecording ? '0 0 14px rgba(244, 63, 94, 0.6)' : 'none',
+                  animation: isRecording ? 'pulse 1.2s ease-in-out infinite' : 'none'
                 }}
               >
-                🎙️
+                {vs === VOICE_STATE.REQUESTING ? '⏳' : isRecording ? '⏹️' : vs === VOICE_STATE.TRANSCRIBING ? '🧠' : '🎙️'}
               </button>
             </div>
           </div>
 
           {isRecording && (
             <div style={{ color: 'var(--accent-rose)', fontSize: '0.85rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span className="pulse-dot" style={{ color: 'var(--accent-rose)' }}>🔴</span> Recording audio in {selectedLanguage}... Click microphone icon again to stop & transcribe.
+              <span style={{ color: 'var(--accent-rose)' }}>🔴</span> {t('interview.listening')} — {Math.round(recorder.elapsedMs / 1000)}s
             </div>
           )}
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <button
-              type="button"
-              className="btn btn-outline"
-              onClick={onFinishInterview}
-            >
-              Skip to Document Upload →
+            <button type="button" className="btn btn-outline" onClick={onFinishInterview}>
+              {t('interview.skip')}
             </button>
 
             <button
               type="submit"
               className="btn btn-primary"
-              disabled={isLoading || isTranscribing || !answer.trim()}
+              disabled={isLoading || isBusy || isTranscribed || !answer.trim()}
             >
-              {isLoading ? 'Processing...' : 'Submit Answer →'}
+              {isLoading ? t('interview.processing') : t('interview.submit')}
             </button>
           </div>
         </form>
@@ -399,7 +414,7 @@ export default function AdaptiveInterview({
       {qaHistory.length > 0 && (
         <div className="glass-card" style={{ padding: '1.25rem 2rem' }}>
           <h4 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.1rem', marginBottom: '1rem', color: 'var(--text-muted)' }}>
-            📋 Answered History ({qaHistory.length})
+            {t('interview.answeredHistory', { n: qaHistory.length })}
           </h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             {qaHistory.map((item, idx) => (
@@ -413,7 +428,8 @@ export default function AdaptiveInterview({
                   Q{idx + 1}: {item.question}
                 </div>
                 <div style={{ fontSize: '0.95rem', color: 'var(--text-main)', marginTop: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span className="tag-interview">🎤 Interview</span> {item.answer}
+                  {item.inputMode === 'voice' ? <span className="tag-interview">{t('interview.tagVoice')}</span> : <span className="tag-interview">{t('interview.tagText')}</span>}
+                  {item.answer}
                 </div>
               </div>
             ))}

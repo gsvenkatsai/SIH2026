@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { I18nProvider, useLanguage, normalizeLanguage } from './i18n';
 import RoleSelect from './components/RoleSelect';
 import LanguageSelect from './components/LanguageSelect';
 import ChiefComplaint from './components/ChiefComplaint';
@@ -19,12 +20,28 @@ import {
 } from './api';
 
 export default function App() {
+  return (
+    <I18nProvider>
+      <KioskApp />
+    </I18nProvider>
+  );
+}
+
+function KioskApp() {
+  const { t, language, setLanguage: setI18nLanguage, config: langConfig } = useLanguage();
   // Navigation / Role states
   const [activeRole, setActiveRole] = useState('none'); // 'none' | 'patient' | 'doctor'
   const [patientStep, setPatientStep] = useState(1); // 1: Lang, 2: Complaint, 3: Interview, 4: Upload, 5: Summary
 
-  // Patient Intake States
-  const [selectedLanguage, setSelectedLanguage] = useState('English');
+  // Patient Intake States (canonical language code, e.g. 'kn-IN')
+  const [selectedLanguage, setSelectedLanguage] = useState(langConfig.code);
+
+  // Keep the i18n layer in sync when the kiosk language changes.
+  const changeLanguage = (lang) => {
+    const canonical = normalizeLanguage(lang);
+    setSelectedLanguage(canonical);
+    setI18nLanguage(canonical);
+  };
   const [visitId, setVisitId] = useState(null);
   const [currentQuestion, setCurrentQuestion] = useState('');
   const [questionId, setQuestionId] = useState('');
@@ -63,7 +80,7 @@ export default function App() {
       setErrorMessage('');
     } catch (err) {
       console.error(err);
-      setErrorMessage('Unable to connect to backend server. Make sure FastAPI is running on port 8000.');
+      setErrorMessage(t('err.backend'));
     } finally {
       setIsLoading(false);
     }
@@ -86,23 +103,27 @@ export default function App() {
       setPatientStep(3); // Advance to Interview
     } catch (err) {
       console.error(err);
-      setErrorMessage('Failed to start intake interview. Check backend status.');
+      setErrorMessage(t('err.startFailed'));
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleAnswerInterview = async (qId, answer, shorten = false) => {
+  const handleAnswerInterview = async (qId, answer, shorten = false, voiceMeta = null) => {
     try {
       setIsLoading(true);
       setErrorMessage('');
-      
-      // Push to history
+
+      // Push to history (input mode is preserved so history shows 🎤 vs ⌨️)
       if (answer && answer.trim()) {
-        setQaHistory((prev) => [...prev, { question: currentQuestion, answer }]);
+        setQaHistory((prev) => [...prev, {
+          question: currentQuestion,
+          answer,
+          inputMode: voiceMeta ? 'voice' : 'text'
+        }]);
       }
 
-      const res = await apiAnswerInterview(visitId, qId, answer, shorten);
+      const res = await apiAnswerInterview(visitId, qId, answer, shorten, voiceMeta);
       if (res.socrates_state) setSocratesState(res.socrates_state);
       if (res.red_flag_alert !== undefined) setRedFlagAlert(res.red_flag_alert);
       if (res.triage_status) setTriageStatus(res.triage_status);
@@ -120,7 +141,7 @@ export default function App() {
       }
     } catch (err) {
       console.error(err);
-      setErrorMessage('Failed to submit answer.');
+      setErrorMessage(t('err.submitFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -138,7 +159,7 @@ export default function App() {
       setUploadedDocs((prev) => [...prev, res]);
     } catch (err) {
       console.error(err);
-      setErrorMessage('Failed to upload document.');
+      setErrorMessage(t('err.uploadFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -153,7 +174,7 @@ export default function App() {
       setPatientStep(5); // Summary Screen
     } catch (err) {
       console.error(err);
-      setErrorMessage('Failed to compile patient summary.');
+      setErrorMessage(t('err.summaryFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -218,19 +239,19 @@ export default function App() {
                 setSelectedDoctorVisitId(null);
               }}
             >
-              🔄 Change Role
+              {t('nav.changeRole')}
             </button>
           )}
 
           {activeRole === 'patient' && (
             <span style={{ fontSize: '0.85rem', color: 'var(--accent-cyan)', background: 'rgba(6, 182, 212, 0.15)', padding: '0.3rem 0.8rem', borderRadius: 'var(--radius-full)' }}>
-              Patient Mode ({selectedLanguage})
+              {t('nav.patientMode', { lang: langConfig.native })}
             </span>
           )}
 
           {activeRole === 'doctor' && (
             <span style={{ fontSize: '0.85rem', color: 'var(--accent-indigo)', background: 'rgba(99, 102, 241, 0.15)', padding: '0.3rem 0.8rem', borderRadius: 'var(--radius-full)' }}>
-              👨‍⚕️ Doctor Mode
+              {t('nav.doctorMode')}
             </span>
           )}
         </div>
@@ -269,7 +290,7 @@ export default function App() {
             {patientStep === 1 && (
               <LanguageSelect
                 selectedLanguage={selectedLanguage}
-                onSelectLanguage={setSelectedLanguage}
+                onSelectLanguage={changeLanguage}
                 onNext={() => setPatientStep(2)}
               />
             )}

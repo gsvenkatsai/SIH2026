@@ -1,20 +1,22 @@
 const API_BASE_URL = "http://localhost:8005";
 
-export async function apiStartInterview(chiefComplaint, patientName = "Anonymous Patient", language = "English") {
+import { normalizeLanguage } from './i18n';
+
+export async function apiStartInterview(chiefComplaint, patientName = "Anonymous Patient", language = "en-IN") {
   const response = await fetch(`${API_BASE_URL}/interview/start`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       chief_complaint: chiefComplaint,
       patient_name: patientName,
-      language: language
+      language: normalizeLanguage(language)
     })
   });
   if (!response.ok) throw new Error("Failed to start interview");
   return response.json();
 }
 
-export async function apiAnswerInterview(visitId, questionId, answer, shortenIntake = false) {
+export async function apiAnswerInterview(visitId, questionId, answer, shortenIntake = false, voiceMeta = null) {
   const response = await fetch(`${API_BASE_URL}/interview/answer`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -22,22 +24,50 @@ export async function apiAnswerInterview(visitId, questionId, answer, shortenInt
       visit_id: visitId,
       question_id: questionId,
       answer: answer,
-      shorten_intake: shortenIntake
+      shorten_intake: shortenIntake,
+      ...(voiceMeta ? {
+        input_mode: "voice",
+        language: voiceMeta.language,
+        original_transcript: voiceMeta.original_transcript,
+        transcription_confidence: voiceMeta.confidence
+      } : {})
     })
   });
   if (!response.ok) throw new Error("Failed to submit answer");
   return response.json();
 }
 
-export async function apiAnswerInterviewVoice(visitId, questionId, audioBlob, language = "English") {
-  let langCode = "en";
-  if (language === "Hindi" || language === "hi") langCode = "hi";
-  if (language === "Kannada" || language === "kn") langCode = "kn";
+export async function apiTranscribeVoice(audioBlob, language = "en-IN") {
+  /** ASR only — clinical interpretation happens via apiAnswerInterview. */
+  const formData = new FormData();
+  formData.append("file", audioBlob, "speech.webm");
+  formData.append("language", normalizeLanguage(language));
 
+  const response = await fetch(`${API_BASE_URL}/voice/transcribe`, {
+    method: "POST",
+    body: formData
+  });
+  if (!response.ok) {
+    let detail = "mic.transcriptionFailed";
+    try {
+      const body = await response.json();
+      if (body.detail) detail = mapAsrError(body.detail);
+    } catch {
+      /* non-JSON error body */
+    }
+    const err = new Error("Voice transcription failed");
+    err.kind = detail;
+    throw err;
+  }
+  return response.json(); // { success, language, transcript, confidence }
+}
+
+export async function apiAnswerInterviewVoice(visitId, questionId, audioBlob, language = "en-IN") {
+  /** Legacy combined endpoint — retained for backwards compatibility. */
   const formData = new FormData();
   formData.append("visit_id", visitId);
   formData.append("question_id", questionId);
-  formData.append("language", langCode);
+  formData.append("language", normalizeLanguage(language));
   formData.append("file", audioBlob, "user_voice.webm");
 
   const response = await fetch(`${API_BASE_URL}/interview/answer-voice`, {
@@ -49,6 +79,20 @@ export async function apiAnswerInterviewVoice(visitId, questionId, audioBlob, la
     throw new Error(`Voice transcription error: ${errText}`);
   }
   return response.json();
+}
+
+function mapAsrError(detail) {
+  switch (detail) {
+    case "no_api_key":
+    case "asr_unavailable":
+      return "mic.serviceUnavailable";
+    case "empty_audio":
+      return "mic.emptyRecording";
+    case "unsupported_format":
+      return "mic.transcriptionFailed";
+    default:
+      return "mic.transcriptionFailed";
+  }
 }
 
 export async function apiUploadDocument(visitId, file) {

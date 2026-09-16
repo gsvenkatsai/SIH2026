@@ -1,6 +1,8 @@
 import React from 'react';
+import { useLanguage } from '../i18n';
 
 export default function PatientSummary({ finalRecord, onComplete, onReturnToHome }) {
+  const { t } = useLanguage();
   const rec = finalRecord?.structured_record || {};
   const interviewFacts = rec.interview_facts || [];
   const documentFacts = rec.document_facts || [];
@@ -12,10 +14,10 @@ export default function PatientSummary({ finalRecord, onComplete, onReturnToHome
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
           <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>🎉</div>
           <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '2.2rem', marginBottom: '0.5rem' }}>
-            Intake Completed & Source-Tagged!
+            {t('summary.title')}
           </h2>
           <p style={{ color: 'var(--text-muted)' }}>
-            Your history and uploaded documents have been compiled into a structured clinical snapshot for your doctor.
+            {t('summary.subtitle')}
           </p>
         </div>
 
@@ -28,7 +30,7 @@ export default function PatientSummary({ finalRecord, onComplete, onReturnToHome
           marginBottom: '1.5rem'
         }}>
           <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--accent-indigo)', textTransform: 'uppercase' }}>
-            CHIEF COMPLAINT
+            {t('summary.chiefComplaint')}
           </span>
           <div style={{ fontSize: '1.25rem', fontWeight: 600, color: '#f8fafc', marginTop: '0.2rem' }}>
             {rec.chief_complaint || 'General Consultation'}
@@ -40,11 +42,11 @@ export default function PatientSummary({ finalRecord, onComplete, onReturnToHome
           {/* Interview Facts */}
           <div>
             <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.15rem', marginBottom: '0.75rem', color: '#a5b4fc', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              🎤 Interview Facts ({interviewFacts.length})
+              {t('summary.interviewFacts', { n: interviewFacts.length })}
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
               {interviewFacts.length === 0 ? (
-                <div style={{ color: 'var(--text-subtle)', fontSize: '0.9rem' }}>No concrete interview facts logged.</div>
+                <div style={{ color: 'var(--text-subtle)', fontSize: '0.9rem' }}>{t('summary.noInterviewFacts')}</div>
               ) : (
                 interviewFacts.map((item, idx) => (
                   <div key={idx} style={{
@@ -65,11 +67,11 @@ export default function PatientSummary({ finalRecord, onComplete, onReturnToHome
           {/* Document Facts */}
           <div>
             <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.15rem', marginBottom: '0.75rem', color: '#67e8f9', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              📄 Document Evidence ({documentFacts.length})
+              {t('summary.documentEvidence', { n: documentFacts.length })}
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
               {documentFacts.length === 0 ? (
-                <div style={{ color: 'var(--text-subtle)', fontSize: '0.9rem' }}>No document extractions logged.</div>
+                <div style={{ color: 'var(--text-subtle)', fontSize: '0.9rem' }}>{t('summary.noDocFacts')}</div>
               ) : (
                 documentFacts.map((item, idx) => (
                   <div key={idx} style={{
@@ -98,7 +100,7 @@ export default function PatientSummary({ finalRecord, onComplete, onReturnToHome
             marginBottom: '2rem'
           }}>
             <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.1rem', marginBottom: '0.75rem', color: '#fde047', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              ❓ Incomplete / Unclear Data Gaps ({unclearFacts.length})
+              {t('summary.unclear', { n: unclearFacts.length })}
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
               {unclearFacts.map((item, idx) => (
@@ -113,10 +115,10 @@ export default function PatientSummary({ finalRecord, onComplete, onReturnToHome
                     Q: {item.question}
                   </div>
                   <div style={{ color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                    Given Answer: <em>"{item.answer}"</em>
+                    {t('summary.givenAnswer')} <em>"{item.answer}"</em>
                   </div>
                   <div style={{ color: '#94a3b8', fontSize: '0.8rem', marginTop: '0.2rem', fontStyle: 'italic' }}>
-                    ⚠️ {item.issue || 'Unclear or incomplete response — doctor review needed.'}
+                    ⚠️ {item.issue || t('summary.unclearNote')}
                   </div>
                 </div>
               ))}
@@ -135,15 +137,15 @@ export default function PatientSummary({ finalRecord, onComplete, onReturnToHome
           marginBottom: '2rem',
           textAlign: 'center'
         }}>
-          🛡️ <strong>Safety Guarantee:</strong> AI collects and organizes facts. Nothing reaches your permanent record without explicit physician review and approval.
+          🛡️ <strong>{t('summary.safety')}</strong> {t('summary.safetyText')}
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem' }}>
           <button className="btn btn-primary" onClick={onComplete}>
-            Handover to Doctor Portal →
+            {t('summary.handover')}
           </button>
           <button className="btn btn-outline" onClick={onReturnToHome}>
-            Back to Home
+            {t('summary.home')}
           </button>
         </div>
       </div>

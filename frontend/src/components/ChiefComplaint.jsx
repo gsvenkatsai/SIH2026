@@ -1,5 +1,10 @@
 import React, { useState } from 'react';
+import { useLanguage } from '../i18n';
 
+// Complaint chips stay clinical-English on purpose: the backend tree router
+// (get_tree_key) matches English keywords, and SOCRATES extraction is
+// language-neutral. The patient types their complaint in whichever language
+// they prefer — extraction handles it.
 const QUICK_CHIPS = [
   "Chest pain radiating to left arm",
   "High fever with chills for 3 days",
@@ -9,7 +14,8 @@ const QUICK_CHIPS = [
 ];
 
 export default function ChiefComplaint({ onStartInterview, isLoading }) {
-  const [patientName, setPatientName] = useState('Rahul Sharma');
+  const { t } = useLanguage();
+  const [patientName, setPatientName] = useState('');
   const [complaint, setComplaint] = useState('');
 
   const handleSubmit = (e) => {
@@ -22,39 +28,39 @@ export default function ChiefComplaint({ onStartInterview, isLoading }) {
     <div style={{ maxWidth: '680px', margin: '2rem auto' }}>
       <div className="glass-card">
         <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.8rem', marginBottom: '0.5rem' }}>
-          📝 What brings you to the doctor today?
+          📝 {t('complaint.title')}
         </h2>
         <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
-          Please describe your primary symptoms or main health concern in your own words.
+          {t('complaint.subtitle')}
         </p>
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label className="form-label">Patient Name (Optional)</label>
+            <label className="form-label">{t('complaint.name')}</label>
             <input
               type="text"
               className="form-input"
               value={patientName}
               onChange={(e) => setPatientName(e.target.value)}
-              placeholder="e.g. John Doe"
+              placeholder={t('complaint.namePlaceholder')}
             />
           </div>
 
           <div className="form-group">
-            <label className="form-label">Chief Complaint / Primary Symptoms *</label>
+            <label className="form-label">{t('complaint.label')}</label>
             <textarea
               className="form-textarea"
               rows={3}
               value={complaint}
               onChange={(e) => setComplaint(e.target.value)}
-              placeholder="e.g. I have been having chest pain and shortness of breath since morning..."
+              placeholder={t('complaint.placeholder')}
               required
             />
           </div>
 
           <div style={{ marginBottom: '1.5rem' }}>
             <label className="form-label" style={{ marginBottom: '0.5rem', display: 'block' }}>
-              Quick Selection:
+              {t('complaint.quick')}
             </label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
               {QUICK_CHIPS.map((chip, idx) => (
@@ -72,8 +78,8 @@ export default function ChiefComplaint({ onStartInterview, isLoading }) {
                     cursor: 'pointer',
                     transition: 'all 0.2s ease'
                   }}
-                  onMouseEnter={(e) => e.target.style.borderColor = 'var(--accent-indigo)'}
-                  onMouseLeave={(e) => e.target.style.borderColor = 'var(--border-color)'}
+                  onMouseEnter={(e) => (e.target.style.borderColor = 'var(--accent-indigo)')}
+                  onMouseLeave={(e) => (e.target.style.borderColor = 'var(--border-color)')}
                 >
                   + {chip}
                 </button>
@@ -83,7 +89,7 @@ export default function ChiefComplaint({ onStartInterview, isLoading }) {
 
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
             <button className="btn btn-primary" type="submit" disabled={isLoading || !complaint.trim()}>
-              {isLoading ? 'Starting Interview...' : 'Start AI Interview →'}
+              {isLoading ? t('complaint.starting') : t('complaint.start')}
             </button>
           </div>
         </form>

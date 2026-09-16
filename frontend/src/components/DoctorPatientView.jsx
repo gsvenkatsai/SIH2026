@@ -380,11 +380,38 @@ export default function DoctorPatientView({ patientRecord, onApprove, onBack, is
                     borderRadius: 'var(--radius-md)',
                     padding: '0.9rem'
                   }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.3rem' }}>
-                      <span className="tag-interview">🎤 Interview</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.3rem', flexWrap: 'wrap', gap: '0.25rem' }}>
+                      {item.input_mode === 'voice' ? (
+                        <span className="tag-interview">
+                          🎤 Voice — {item.language || 'Voice input'}
+                        </span>
+                      ) : (
+                        <span className="tag-interview">🎤 Interview</span>
+                      )}
+                      {item.transcription_confidence != null && (
+                        <span style={{ fontSize: '0.72rem', color: 'var(--text-subtle)' }}>
+                          ASR {Math.round(item.transcription_confidence * 100)}%
+                        </span>
+                      )}
                       {item.timestamp && <span style={{ fontSize: '0.75rem', color: 'var(--text-subtle)' }}>{new Date(item.timestamp).toLocaleTimeString()}</span>}
                     </div>
                     <div style={{ color: '#f1f5f9', fontSize: '0.92rem' }}>{item.fact}</div>
+                    {item.input_mode === 'voice' && item.original_transcript && (
+                      <div style={{
+                        marginTop: '0.4rem',
+                        padding: '0.4rem 0.6rem',
+                        background: 'rgba(59, 130, 246, 0.08)',
+                        borderLeft: '3px solid rgba(59, 130, 246, 0.5)',
+                        borderRadius: '4px',
+                        fontSize: '0.82rem',
+                        color: '#93c5fd'
+                      }}>
+                        <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.4px', color: 'var(--text-subtle)', marginBottom: '0.1rem' }}>
+                          Original transcript
+                        </div>
+                        "{item.original_transcript}"
+                      </div>
+                    )}
                   </div>
                 ))
               )}
