@@ -10,8 +10,10 @@ export default function LanguageSelect({ selectedLanguage, onSelectLanguage, onN
         <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.8rem', marginBottom: '0.5rem', textAlign: 'center' }}>
           🌐 {t('lang.title')} / भाषा चुनें / ಭಾಷೆ ಆಯ್ಕೆಮಾಡಿ
         </h2>
+        {/* Trilingual by construction: this screen appears BEFORE any language
+            is known, so every static line must be readable in all three. */}
         <p style={{ color: 'var(--text-muted)', textAlign: 'center', marginBottom: '2rem' }}>
-          {t('lang.subtitle')}
+          Choose your preferred language · अपनी भाषा चुनें · ನಿಮ್ಮ ಭಾಷೆ ಆಯ್ಕೆಮಾಡಿ
         </p>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
@@ -46,7 +48,7 @@ export default function LanguageSelect({ selectedLanguage, onSelectLanguage, onN
 
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <button className="btn btn-primary" onClick={onNext}>
-            {t('lang.continue')}
+            ಮುಂದುವರಿಯಿರಿ · आगे बढ़ें · Continue →
           </button>
         </div>
       </div>

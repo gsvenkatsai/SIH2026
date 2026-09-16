@@ -16,7 +16,9 @@ export async function apiStartInterview(chiefComplaint, patientName = "Anonymous
   return response.json();
 }
 
-export async function apiAnswerInterview(visitId, questionId, answer, shortenIntake = false, voiceMeta = null) {
+export async function apiAnswerInterview(visitId, questionId, answer, shortenIntake = false, meta = null) {
+  /** meta: { language, input_mode?, original_transcript?, confidence? } —
+   *  input_mode defaults to 'text'; voice metadata is only sent when present. */
   const response = await fetch(`${API_BASE_URL}/interview/answer`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -25,11 +27,11 @@ export async function apiAnswerInterview(visitId, questionId, answer, shortenInt
       question_id: questionId,
       answer: answer,
       shorten_intake: shortenIntake,
-      ...(voiceMeta ? {
-        input_mode: "voice",
-        language: voiceMeta.language,
-        original_transcript: voiceMeta.original_transcript,
-        transcription_confidence: voiceMeta.confidence
+      ...(meta ? {
+        input_mode: meta.input_mode || "text",
+        language: meta.language,
+        original_transcript: meta.original_transcript,
+        transcription_confidence: meta.confidence
       } : {})
     })
   });

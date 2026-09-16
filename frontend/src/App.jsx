@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { I18nProvider, useLanguage, normalizeLanguage } from './i18n';
+import { I18nProvider, useLanguage, normalizeLanguage, LANGUAGE_LIST } from './i18n';
 import RoleSelect from './components/RoleSelect';
 import LanguageSelect from './components/LanguageSelect';
 import ChiefComplaint from './components/ChiefComplaint';
@@ -31,7 +31,11 @@ function KioskApp() {
   const { t, language, setLanguage: setI18nLanguage, config: langConfig } = useLanguage();
   // Navigation / Role states
   const [activeRole, setActiveRole] = useState('none'); // 'none' | 'patient' | 'doctor'
-  const [patientStep, setPatientStep] = useState(1); // 1: Lang, 2: Complaint, 3: Interview, 4: Upload, 5: Summary
+  const [patientStep, setPatientStep] = useState(1); // 1: Complaint, 2: Interview, 3: Upload, 4: Summary
+
+  // LANGUAGE IS THE FIRST SCREEN: the kiosk opens on language selection;
+  // role selection follows once a language is chosen.
+  const [languageChosen, setLanguageChosen] = useState(false);
 
   // Patient Intake States (canonical language code, e.g. 'kn-IN')
   const [selectedLanguage, setSelectedLanguage] = useState(langConfig.code);
@@ -100,7 +104,7 @@ function KioskApp() {
       setTriageStatus(res.triage_status || 'NORMAL');
       setTriageMessage(res.message || '');
       setCanShorten(res.can_shorten || false);
-      setPatientStep(3); // Advance to Interview
+      setPatientStep(2); // Advance to Interview
     } catch (err) {
       console.error(err);
       setErrorMessage(t('err.startFailed'));
@@ -110,6 +114,12 @@ function KioskApp() {
   };
 
   const handleAnswerInterview = async (qId, answer, shorten = false, voiceMeta = null) => {
+    // Always send the CURRENT language so a mid-interview switch (navbar)
+    // propagates to the backend without resetting clinical state.
+    const meta = {
+      language: selectedLanguage,
+      ...(voiceMeta ? { input_mode: 'voice', ...voiceMeta } : {})
+    };
     try {
       setIsLoading(true);
       setErrorMessage('');
@@ -123,7 +133,7 @@ function KioskApp() {
         }]);
       }
 
-      const res = await apiAnswerInterview(visitId, qId, answer, shorten, voiceMeta);
+      const res = await apiAnswerInterview(visitId, qId, answer, shorten, meta);
       if (res.socrates_state) setSocratesState(res.socrates_state);
       if (res.red_flag_alert !== undefined) setRedFlagAlert(res.red_flag_alert);
       if (res.triage_status) setTriageStatus(res.triage_status);
@@ -132,12 +142,12 @@ function KioskApp() {
 
       if (res.is_complete || res.status === 'completed' || shorten || !res.next_question) {
         // Section complete -> move to document upload
-        setPatientStep(4);
+        setPatientStep(3);
       } else if (res.status === 'in_progress' && res.next_question) {
         setCurrentQuestion(res.next_question);
         setQuestionId(res.next_question_id);
       } else {
-        setPatientStep(4);
+        setPatientStep(3);
       }
     } catch (err) {
       console.error(err);
@@ -171,7 +181,7 @@ function KioskApp() {
       setErrorMessage('');
       const res = await apiFinalizeRecord(visitId);
       setFinalRecord(res);
-      setPatientStep(5); // Summary Screen
+      setPatientStep(4); // Summary Screen
     } catch (err) {
       console.error(err);
       setErrorMessage(t('err.summaryFailed'));
@@ -230,6 +240,33 @@ function KioskApp() {
         </div>
 
         <div className="nav-controls">
+          {/* Language switcher — always available once a language is chosen
+              (except doctor mode, which is intentionally untranslated).
+              Switching mid-interview keeps all collected clinical state. */}
+          {languageChosen && activeRole !== 'doctor' && (
+            <select
+              aria-label="Language / भाषा / ಭಾಷೆ"
+              value={selectedLanguage}
+              onChange={(e) => changeLanguage(e.target.value)}
+              style={{
+                background: 'rgba(6, 182, 212, 0.15)',
+                color: 'var(--accent-cyan)',
+                border: '1px solid rgba(6, 182, 212, 0.4)',
+                borderRadius: 'var(--radius-full)',
+                padding: '0.35rem 0.8rem',
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                outline: 'none'
+              }}
+            >
+              {LANGUAGE_LIST.map((l) => (
+                <option key={l.code} value={l.code} style={{ background: '#0f172a', color: '#e2e8f0' }}>
+                  {l.flag} {l.native}
+                </option>
+              ))}
+            </select>
+          )}
+
           {activeRole !== 'none' && (
             <button
               className="btn btn-outline"
@@ -274,8 +311,17 @@ function KioskApp() {
           </div>
         )}
 
-        {/* 1. Role Selection Screen */}
-        {activeRole === 'none' && (
+        {/* 1. LANGUAGE FIRST — the kiosk's very first touchpoint (PRD §7.1) */}
+        {activeRole === 'none' && !languageChosen && (
+          <LanguageSelect
+            selectedLanguage={selectedLanguage}
+            onSelectLanguage={changeLanguage}
+            onNext={() => setLanguageChosen(true)}
+          />
+        )}
+
+        {/* 2. Role Selection (rendered in the chosen language) */}
+        {activeRole === 'none' && languageChosen && (
           <RoleSelect
             onSelectRole={(role) => {
               setActiveRole(role);
@@ -284,25 +330,17 @@ function KioskApp() {
           />
         )}
 
-        {/* 2. Patient Kiosk Flow */}
+        {/* 3. Patient Kiosk Flow (language already chosen) */}
         {activeRole === 'patient' && (
           <>
             {patientStep === 1 && (
-              <LanguageSelect
-                selectedLanguage={selectedLanguage}
-                onSelectLanguage={changeLanguage}
-                onNext={() => setPatientStep(2)}
-              />
-            )}
-
-            {patientStep === 2 && (
               <ChiefComplaint
                 onStartInterview={handleStartInterview}
                 isLoading={isLoading}
               />
             )}
 
-            {patientStep === 3 && (
+            {patientStep === 2 && (
               <AdaptiveInterview
                 visitId={visitId}
                 selectedLanguage={selectedLanguage}
@@ -316,12 +354,12 @@ function KioskApp() {
                 canShorten={canShorten}
                 onShortenIntake={handleShortenIntake}
                 onAnswer={handleAnswerInterview}
-                onFinishInterview={() => setPatientStep(4)}
+                onFinishInterview={() => setPatientStep(3)}
                 isLoading={isLoading}
               />
             )}
 
-            {patientStep === 4 && (
+            {patientStep === 3 && (
               <DocumentUpload
                 visitId={visitId}
                 onUpload={handleUploadDoc}
@@ -331,7 +369,7 @@ function KioskApp() {
               />
             )}
 
-            {patientStep === 5 && (
+            {patientStep === 4 && (
               <PatientSummary
                 finalRecord={finalRecord}
                 onComplete={() => {
