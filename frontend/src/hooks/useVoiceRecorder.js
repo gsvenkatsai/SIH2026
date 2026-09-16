@@ -159,10 +159,15 @@ export function useVoiceRecorder({ onRecordingStopped } = {}) {
     setState(VOICE_STATE.TRANSCRIBING);
   }, []);
 
+  const setTranscribed = useCallback(() => {
+    /** ASR succeeded — transcript is ready for patient confirmation. */
+    setState(VOICE_STATE.TRANSCRIBED);
+  }, []);
+
   const setError = useCallback((kind) => {
     setErrorKind(kind);
     setState(VOICE_STATE.ERROR);
   }, []);
 
-  return { state, errorKind, elapsedMs, startRecording, stopRecording, reset, setBusy, setError, setErrorKind };
+  return { state, errorKind, elapsedMs, startRecording, stopRecording, reset, setBusy, setTranscribed, setError, setErrorKind };
 }

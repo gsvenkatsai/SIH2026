@@ -1,365 +1,826 @@
+/* ==========================================================================
+   MediKiosk Design System — "Indian Clinical Heritage × Digital Healthcare"
+   --------------------------------------------------------------------------
+   Concept: "A patient's health story, translated into a language their
+   doctor can understand."
+
+   Two deliberate worlds:
+   • PATIENT  — warm ivory, editorial, calm, voice-first (paper & heritage)
+   • DOCTOR   — deep indigo, dense, precise (clinical instrument)
+
+   Palette: indigo (trust/tech) · ivory (warmth) · terracotta (human voice)
+            saffron (cultural accent, sparing) · sage (healthcare/AYUSH)
+   ========================================================================== */
+
 :root {
-  --bg-dark: #090d16;
-  --bg-card: rgba(19, 27, 46, 0.75);
-  --bg-card-hover: rgba(27, 38, 64, 0.85);
-  --bg-glass: rgba(255, 255, 255, 0.04);
-  --border-color: rgba(255, 255, 255, 0.08);
-  --border-active: rgba(99, 102, 241, 0.5);
+  /* ---- Color tokens ---- */
+  --indigo-900: #10182C;
+  --indigo-800: #18233F;   /* primary */
+  --indigo-700: #243356;
+  --indigo-100: #E3E7F0;
 
-  --accent-cyan: #06b6d4;
-  --accent-indigo: #6366f1;
-  --accent-purple: #8b5cf6;
-  --accent-emerald: #10b981;
-  --accent-amber: #f59e0b;
-  --accent-rose: #f43f5e;
+  --ivory: #F7F3EA;        /* patient background */
+  --ivory-deep: #EFE8D9;
+  --paper: #FDFBF5;
 
-  --text-main: #f8fafc;
-  --text-muted: #94a3b8;
-  --text-subtle: #64748b;
+  --terracotta: #C96A4A;   /* voice / CTA accent */
+  --terracotta-deep: #A85538;
+  --terracotta-wash: rgba(201, 106, 74, 0.12);
 
-  --font-heading: 'Outfit', sans-serif;
-  --font-body: 'Inter', sans-serif;
+  --saffron: #D6A84F;      /* sparing cultural accent */
+  --saffron-wash: rgba(214, 168, 79, 0.16);
 
-  --radius-sm: 8px;
-  --radius-md: 14px;
-  --radius-lg: 20px;
+  --sage: #789B78;         /* healthcare / AYUSH */
+  --sage-wash: rgba(120, 155, 120, 0.16);
+  --forest: #356B52;       /* success */
+
+  --ink: #172033;          /* text on light */
+  --ink-soft: #4A5265;
+  --ink-faint: #8B90A0;
+  --line: rgba(23, 32, 51, 0.14);        /* hairline on ivory */
+  --line-strong: rgba(23, 32, 51, 0.28);
+
+  /* Doctor (dark world) */
+  --doc-bg: #131A2E;
+  --doc-surface: #1B2440;
+  --doc-line: rgba(255, 255, 255, 0.10);
+  --doc-text: #EDF0F7;
+  --doc-muted: #97A0B8;
+  --doc-faint: #6B7490;
+
+  /* Legacy aliases (kept so un-migrated spots never break) */
+  --bg-dark: var(--doc-bg);
+  --bg-card: var(--doc-surface);
+  --border-color: var(--doc-line);
+  --border-active: rgba(201, 106, 74, 0.6);
+  --text-main: var(--doc-text);
+  --text-muted: var(--doc-muted);
+  --text-subtle: var(--doc-faint);
+  --accent-cyan: #5FA8A0;
+  --accent-indigo: #8B97C9;
+  --accent-rose: var(--terracotta);
+  --accent-emerald: var(--forest);
+  --accent-amber: var(--saffron);
+
+  /* ---- Typography ---- */
+  --font-heading: 'Outfit', 'Noto Sans Kannada', 'Noto Sans Devanagari', sans-serif;
+  --font-body: 'Inter', 'Noto Sans Kannada', 'Noto Sans Devanagari', sans-serif;
+
+  /* ---- Geometry ---- */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
   --radius-full: 9999px;
 
-  --shadow-glow: 0 0 25px rgba(99, 102, 241, 0.15);
-  --shadow-cyan: 0 0 25px rgba(6, 182, 212, 0.15);
+  --shadow-soft: 0 2px 10px rgba(23, 32, 51, 0.07);
+  --shadow-lift: 0 10px 28px rgba(23, 32, 51, 0.12);
+  --shadow-doc: 0 12px 32px rgba(9, 13, 26, 0.45);
+
+  --ease: cubic-bezier(0.33, 1, 0.68, 1);
 }
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* --------------------------------------------------------------------------
+   Base — warm ivory with a whisper of handmade-paper grain (CSS only).
+   The texture is two ultra-low-contrast repeating gradients; it never
+   interferes with readability and disappears on low-DPI prints.
+   -------------------------------------------------------------------------- */
 body {
-  background-color: var(--bg-dark);
-  background-image: 
-    radial-gradient(at 15% 15%, rgba(99, 102, 241, 0.12) 0px, transparent 50%),
-    radial-gradient(at 85% 85%, rgba(6, 182, 212, 0.10) 0px, transparent 50%);
-  color: var(--text-main);
+  background-color: var(--ivory);
+  background-image:
+    repeating-linear-gradient(0deg, rgba(23, 32, 51, 0.016) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(90deg, rgba(23, 32, 51, 0.012) 0 1px, transparent 1px 4px),
+    radial-gradient(ellipse 120% 90% at 85% -10%, rgba(214, 168, 79, 0.07), transparent 55%);
+  color: var(--ink);
   font-family: var(--font-body);
   min-height: 100vh;
-  line-height: 1.6;
+  line-height: 1.65;
   -webkit-font-smoothing: antialiased;
 }
 
-/* Scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.6);
-}
-::-webkit-scrollbar-thumb {
-  background: rgba(100, 116, 139, 0.4);
-  border-radius: 4px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.6);
-}
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--ivory-deep); }
+::-webkit-scrollbar-thumb { background: rgba(23, 32, 51, 0.22); border-radius: 5px; border: 2px solid var(--ivory-deep); }
+::-webkit-scrollbar-thumb:hover { background: rgba(23, 32, 51, 0.34); }
 
-/* Layout */
-.app-container {
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-}
+.app-container { display: flex; flex-direction: column; min-height: 100vh; }
 
-/* Header Navbar */
+/* --------------------------------------------------------------------------
+   Navbar — flat ivory band with a terracotta spine down the left edge.
+   -------------------------------------------------------------------------- */
 .navbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1.25rem 2.5rem;
-  background: rgba(11, 15, 25, 0.85);
-  backdrop-filter: blur(16px);
-  border-bottom: 1px solid var(--border-color);
+  padding: 0.9rem 2.5rem;
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
   position: sticky;
   top: 0;
   z-index: 50;
+}
+.navbar::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 6px;
+  background: linear-gradient(180deg, var(--terracotta), var(--saffron));
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.65rem;
   font-family: var(--font-heading);
   font-weight: 700;
-  font-size: 1.4rem;
-  background: linear-gradient(135deg, #38bdf8, #818cf8);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  font-size: 1.35rem;
+  letter-spacing: -0.01em;
+  color: var(--indigo-800);
+  cursor: pointer;
+}
+.brand-icon { display: flex; align-items: center; }
+.brand-tagline {
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  border-left: 1px solid var(--line);
+  padding-left: 0.75rem;
+  margin-left: 0.25rem;
 }
 
-.brand-icon {
-  font-size: 1.6rem;
-  -webkit-text-fill-color: initial;
-}
+.nav-controls { display: flex; align-items: center; gap: 0.75rem; }
 
-.nav-controls {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-/* Buttons & Badges */
+/* --------------------------------------------------------------------------
+   Buttons — flat, tactile, kiosk-sized. No neon, no gradients.
+   -------------------------------------------------------------------------- */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  padding: 0.7rem 1.4rem;
-  border-radius: var(--radius-md);
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--radius-sm);
   font-family: var(--font-body);
   font-weight: 600;
   font-size: 0.95rem;
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.18s var(--ease);
   border: 1px solid transparent;
   outline: none;
 }
+.btn:focus-visible { box-shadow: 0 0 0 3px var(--saffron-wash), 0 0 0 1.5px var(--terracotta); }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--accent-indigo), var(--accent-purple));
-  color: #fff;
-  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+  background: var(--terracotta);
+  color: #FFF8F2;
+  box-shadow: 0 2px 0 var(--terracotta-deep);
 }
+.btn-primary:hover:not(:disabled) { background: var(--terracotta-deep); transform: translateY(-1px); }
+.btn-primary:active:not(:disabled) { transform: translateY(1px); box-shadow: none; }
 
-.btn-primary:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
+.btn-indigo {
+  background: var(--indigo-800);
+  color: #EEF1F8;
+  box-shadow: 0 2px 0 var(--indigo-900);
 }
+.btn-indigo:hover:not(:disabled) { background: var(--indigo-900); transform: translateY(-1px); }
 
-.btn-cyan {
-  background: linear-gradient(135deg, #0284c7, var(--accent-cyan));
-  color: #fff;
-  box-shadow: 0 4px 14px rgba(6, 182, 212, 0.35);
-}
-
-.btn-cyan:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(6, 182, 212, 0.5);
-}
+.btn-cyan { background: var(--indigo-800); color: #EEF1F8; }
+.btn-cyan:hover:not(:disabled) { background: var(--indigo-700); }
 
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--text-main);
-  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--indigo-800);
+  border: 1.5px solid var(--line-strong);
 }
-
-.btn-secondary:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.2);
-}
+.btn-secondary:hover:not(:disabled) { border-color: var(--indigo-800); background: rgba(24, 35, 63, 0.04); }
 
 .btn-outline {
   background: transparent;
-  color: var(--text-muted);
-  border: 1px solid var(--border-color);
+  color: var(--ink-soft);
+  border: 1px solid var(--line-strong);
 }
+.btn-outline:hover:not(:disabled) { color: var(--indigo-800); border-color: var(--indigo-800); }
 
-.btn-outline:hover:not(:disabled) {
-  color: var(--text-main);
-  border-color: var(--border-active);
-}
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+/* Legacy dark-context buttons (doctor surfaces) */
+.doc-world .btn-outline { color: var(--doc-muted); border-color: var(--doc-line); }
+.doc-world .btn-outline:hover:not(:disabled) { color: var(--doc-text); border-color: var(--indigo-100); }
 
-/* Glass Card */
+/* --------------------------------------------------------------------------
+   Editorial surfaces — hairline-bordered panels, NOT floating glass cards.
+   -------------------------------------------------------------------------- */
 .glass-card {
-  background: var(--bg-card);
-  backdrop-filter: blur(16px);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
   padding: 2rem;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
-  transition: all 0.3s ease;
+  box-shadow: var(--shadow-soft);
+}
+.glass-card:hover { border-color: var(--line-strong); }
+
+/* A section rule — editorial divider with small-caps kicker */
+.section-rule {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 1.25rem 0;
+}
+.kicker {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--terracotta);
 }
 
-.glass-card:hover {
-  border-color: rgba(255, 255, 255, 0.15);
-}
-
-/* Role Selection Grid */
-.role-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 2rem;
-  margin-top: 2rem;
-}
-
+/* --------------------------------------------------------------------------
+   Role cards — asymmetric editorial entries, not equal icon cards.
+   -------------------------------------------------------------------------- */
+.role-grid { display: grid; grid-template-columns: 1fr 1px; background: transparent; }
+.role-grid { display: flex; align-items: stretch; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .role-card {
+  flex: 1;
   cursor: pointer;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  text-align: center;
-  padding: 3rem 2rem;
-  border-radius: var(--radius-lg);
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  transition: all 0.3s ease;
+  align-items: flex-start;
+  text-align: left;
+  padding: 2.5rem 2.25rem;
+  background: transparent;
+  border: none;
+  border-right: 1px solid var(--line);
+  transition: background 0.2s var(--ease);
+  position: relative;
+}
+.role-card:last-child { border-right: none; }
+.role-card:hover { background: rgba(24, 35, 63, 0.035); }
+.role-card::after {
+  content: '';
+  position: absolute;
+  left: 2.25rem; right: 2.25rem; bottom: 1.4rem;
+  height: 2px;
+  background: var(--terracotta);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.25s var(--ease);
+}
+.role-card:hover::after { transform: scaleX(1); }
+.role-icon { font-size: 1.6rem; margin-bottom: 0.9rem; color: var(--indigo-800); }
+.role-kicker {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-bottom: 0.3rem;
 }
 
-.role-card:hover {
-  transform: translateY(-6px);
-  border-color: var(--accent-indigo);
-  box-shadow: var(--shadow-glow);
-  background: var(--bg-card-hover);
-}
-
-.role-icon {
-  font-size: 3.5rem;
-  margin-bottom: 1rem;
-  padding: 1rem;
-  border-radius: 50%;
-  background: rgba(99, 102, 241, 0.1);
-}
-
-/* Inputs & Form Control */
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: 1.5rem;
-}
-
-.form-label {
-  font-weight: 500;
-  font-size: 0.95rem;
-  color: var(--text-muted);
-}
+/* --------------------------------------------------------------------------
+   Forms — paper inputs with terracotta focus.
+   -------------------------------------------------------------------------- */
+.form-group { display: flex; flex-direction: column; gap: 0.45rem; margin-bottom: 1.4rem; }
+.form-label { font-weight: 600; font-size: 0.92rem; color: var(--ink-soft); }
 
 .form-input, .form-textarea {
-  background: rgba(15, 23, 42, 0.7);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  padding: 0.9rem 1.2rem;
-  color: var(--text-main);
+  background: var(--paper);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  padding: 0.85rem 1.05rem;
+  color: var(--ink);
   font-family: var(--font-body);
   font-size: 1rem;
   outline: none;
-  transition: all 0.2s ease;
+  transition: border-color 0.18s var(--ease), box-shadow 0.18s var(--ease);
 }
-
+.form-input::placeholder, .form-textarea::placeholder { color: var(--ink-faint); }
 .form-input:focus, .form-textarea:focus {
-  border-color: var(--accent-indigo);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+  border-color: var(--terracotta);
+  box-shadow: 0 0 0 3px var(--terracotta-wash);
 }
 
-/* Source Tags & Badges */
-.tag-interview {
+/* --------------------------------------------------------------------------
+   Source badges — the evidence-linking system (PRD §25 / redesign §25).
+   -------------------------------------------------------------------------- */
+.tag-interview, .tag-document {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  background: rgba(99, 102, 241, 0.15);
-  color: #a5b4fc;
-  border: 1px solid rgba(99, 102, 241, 0.3);
-  padding: 0.25rem 0.6rem;
+  padding: 0.22rem 0.6rem;
   border-radius: var(--radius-full);
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   font-weight: 600;
 }
+.tag-interview { background: var(--terracotta-wash); color: var(--terracotta-deep); border: 1px solid rgba(201, 106, 74, 0.3); }
+.tag-document  { background: var(--sage-wash);      color: #4E6B4E;             border: 1px solid rgba(120, 155, 120, 0.35); }
 
-.tag-document {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  background: rgba(6, 182, 212, 0.15);
-  color: #67e8f9;
-  border: 1px solid rgba(6, 182, 212, 0.3);
-  padding: 0.25rem 0.6rem;
-  border-radius: var(--radius-full);
-  font-size: 0.8rem;
-  font-weight: 600;
-}
+/* Doctor-world variants */
+.doc-world .tag-interview { background: rgba(201, 106, 74, 0.18); color: #E8A18B; border-color: rgba(201, 106, 74, 0.4); }
+.doc-world .tag-document  { background: rgba(120, 155, 120, 0.18); color: #A9C4A9; border-color: rgba(120, 155, 120, 0.4); }
 
 .badge-warning {
-  background: rgba(245, 158, 11, 0.15);
-  color: #fcd34d;
-  border: 1px solid rgba(245, 158, 11, 0.3);
-  padding: 0.5rem 1rem;
-  border-radius: var(--radius-md);
+  background: var(--saffron-wash);
+  color: #8A6B23;
+  border: 1px solid rgba(214, 168, 79, 0.4);
+  padding: 0.6rem 1rem;
+  border-radius: var(--radius-sm);
   font-size: 0.9rem;
 }
-
 .badge-alert {
-  background: rgba(244, 63, 94, 0.15);
-  color: #fda4af;
-  border: 1px solid rgba(244, 63, 94, 0.3);
-  padding: 0.5rem 1rem;
-  border-radius: var(--radius-md);
+  background: var(--terracotta-wash);
+  color: var(--terracotta-deep);
+  border: 1px solid rgba(201, 106, 74, 0.4);
+  padding: 0.6rem 1rem;
+  border-radius: var(--radius-sm);
   font-size: 0.9rem;
 }
 
-/* Progress bar */
-.progress-bar-bg {
-  width: 100%;
-  height: 8px;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: var(--radius-full);
+/* --------------------------------------------------------------------------
+   Health Journey progress (vertical step rail).
+   -------------------------------------------------------------------------- */
+.journey { display: flex; flex-direction: column; gap: 0; }
+.journey-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.8rem;
+  position: relative;
+  padding-bottom: 1.1rem;
+}
+.journey-step:last-child { padding-bottom: 0; }
+.journey-dot {
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--ink-faint);
+  background: transparent;
+  margin-top: 5px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+  transition: all 0.25s var(--ease);
+}
+.journey-step:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 5px; top: 20px; bottom: 2px;
+  width: 1.5px;
+  background: var(--line);
+}
+.journey-step.done .journey-dot { background: var(--sage); border-color: var(--sage); }
+.journey-step.done:not(:last-child)::before { background: var(--sage); }
+.journey-step.current .journey-dot {
+  background: var(--terracotta);
+  border-color: var(--terracotta);
+  box-shadow: 0 0 0 4px var(--terracotta-wash);
+}
+.journey-step.current:not(:last-child)::before { background: var(--line); }
+.journey-label {
+  font-size: 0.86rem;
+  font-weight: 500;
+  color: var(--ink-faint);
+  line-height: 1.3;
+}
+.journey-step.done .journey-label { color: var(--ink-soft); }
+.journey-step.current .journey-label { color: var(--ink); font-weight: 700; }
+
+/* --------------------------------------------------------------------------
+   Progress bar (SOCRATES coverage) — slim indigo, no gradient glow.
+   -------------------------------------------------------------------------- */
+.progress-bar-bg { width: 100%; height: 6px; background: rgba(23, 32, 51, 0.1); border-radius: var(--radius-full); overflow: hidden; margin: 1rem 0; }
+.progress-bar-fill { height: 100%; background: var(--indigo-800); transition: width 0.45s var(--ease); }
+
+/* --------------------------------------------------------------------------
+   Voice interaction — the signature kiosk element.
+   Deep indigo field, central mic, terracotta active state, saffron rings.
+   Physical/organic — NOT a Siri clone, no neon glow.
+   -------------------------------------------------------------------------- */
+.voice-field {
+  background: var(--indigo-800);
+  border-radius: var(--radius-lg);
+  color: var(--doc-text);
+  padding: 2.5rem 2rem 2rem;
+  text-align: center;
+  position: relative;
   overflow: hidden;
-  margin: 1rem 0;
+}
+/* Fine textile weave inside the indigo field */
+.voice-field::before {
+  content: '';
+  position: absolute; inset: 0;
+  background:
+    repeating-linear-gradient(45deg, rgba(247, 243, 234, 0.025) 0 1px, transparent 1px 6px),
+    repeating-linear-gradient(-45deg, rgba(247, 243, 234, 0.02) 0 1px, transparent 1px 6px);
+  pointer-events: none;
 }
 
-.progress-bar-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--accent-cyan), var(--accent-indigo));
-  transition: width 0.4s ease;
+.mic-button {
+  width: 88px; height: 88px;
+  border-radius: 50%;
+  border: none;
+  background: var(--paper);
+  color: var(--indigo-800);
+  font-size: 2rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: transform 0.18s var(--ease), background 0.18s var(--ease);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+}
+.mic-button:hover:not(:disabled) { transform: scale(1.05); }
+.mic-button:active:not(:disabled) { transform: scale(0.97); }
+.mic-button:disabled { cursor: not-allowed; opacity: 0.75; }
+
+.mic-button.recording { background: var(--terracotta); color: #FFF3EC; }
+.mic-button.recording { animation: mic-pulse 1.6s ease-out infinite; }
+@keyframes mic-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(201, 106, 74, 0.45); }
+  70%  { box-shadow: 0 0 0 26px rgba(201, 106, 74, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(201, 106, 74, 0); }
 }
 
-/* Doctor Queue Table */
-.queue-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 1rem;
+/* Concentric static rings — architectural, not flashy */
+.mic-rings { position: relative; display: inline-flex; align-items: center; justify-content: center; }
+.mic-rings::before, .mic-rings::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(247, 243, 234, 0.16);
+  pointer-events: none;
 }
+.mic-rings::before { width: 128px; height: 128px; }
+.mic-rings::after  { width: 176px; height: 176px; border-color: rgba(247, 243, 234, 0.09); }
 
-.queue-table th, .queue-table td {
-  padding: 1rem 1.25rem;
-  text-align: left;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.queue-table th {
-  color: var(--text-subtle);
-  font-weight: 600;
-  font-size: 0.85rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.queue-table tr:hover td {
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.status-badge {
-  padding: 0.25rem 0.75rem;
+/* Waveform — saffron bars; .live animates only while recording */
+.waveform {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 34px;
+  padding: 0.55rem 1.1rem;
+  border: 1px solid rgba(247, 243, 234, 0.22);
   border-radius: var(--radius-full);
-  font-size: 0.8rem;
+  background: rgba(16, 24, 44, 0.35);
+}
+.waveform span {
+  width: 3px;
+  border-radius: 2px;
+  background: var(--saffron);
+  height: 6px;
+  opacity: 0.55;
+  transition: height 0.2s var(--ease);
+}
+.waveform.live span { animation: wave 1.1s ease-in-out infinite; opacity: 0.95; }
+.waveform.live span:nth-child(1) { animation-delay: 0s; }
+.waveform.live span:nth-child(2) { animation-delay: 0.12s; }
+.waveform.live span:nth-child(3) { animation-delay: 0.24s; }
+.waveform.live span:nth-child(4) { animation-delay: 0.36s; }
+.waveform.live span:nth-child(5) { animation-delay: 0.48s; }
+.waveform.live span:nth-child(6) { animation-delay: 0.6s; }
+.waveform.live span:nth-child(7) { animation-delay: 0.72s; }
+@keyframes wave {
+  0%, 100% { height: 6px; }
+  50% { height: 24px; }
+}
+
+/* --------------------------------------------------------------------------
+   Language selection — typographic, equal importance to all three scripts.
+   -------------------------------------------------------------------------- */
+.lang-options { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: var(--radius-md); overflow: hidden; background: var(--paper); }
+.lang-option {
+  padding: 2rem 1.5rem;
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  border-right: 1px solid var(--line);
+  position: relative;
+  transition: background 0.18s var(--ease);
+  font-family: var(--font-body);
+}
+.lang-option:last-child { border-right: none; }
+.lang-option:hover { background: rgba(24, 35, 63, 0.035); }
+.lang-option.selected { background: rgba(24, 35, 63, 0.045); }
+.lang-option.selected::after {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--terracotta);
+}
+.lang-glyph {
+  font-family: var(--font-heading);
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--indigo-800);
+  width: 3.2rem; height: 3.2rem;
+  display: flex; align-items: center; justify-content: center;
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  margin-bottom: 1rem;
+  transition: all 0.18s var(--ease);
+}
+.lang-option.selected .lang-glyph { border-color: var(--terracotta); color: var(--terracotta-deep); background: var(--terracotta-wash); }
+.lang-native { font-size: 1.2rem; font-weight: 700; color: var(--ink); line-height: 1.2; }
+.lang-sub { font-size: 0.9rem; color: var(--ink-soft); margin-top: 0.2rem; }
+.lang-check {
+  position: absolute;
+  top: 1rem; right: 1rem;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: var(--terracotta);
+  color: #FFF8F2;
+  font-size: 0.75rem;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0;
+  transform: scale(0.6);
+  transition: all 0.2s var(--ease);
+}
+.lang-option.selected .lang-check { opacity: 1; transform: scale(1); }
+
+/* --------------------------------------------------------------------------
+   Transcript confirmation — editorial pull-quote, original language kept.
+   -------------------------------------------------------------------------- */
+.transcript-quote {
+  border-left: 4px solid var(--terracotta);
+  background: var(--paper);
+  padding: 1.25rem 1.5rem;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  border-top: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.transcript-quote blockquote {
+  font-size: 1.18rem;
+  line-height: 1.7;
+  color: var(--ink);
+  font-weight: 500;
+}
+
+/* --------------------------------------------------------------------------
+   Question view — editorial: question dominates, no card boxing.
+   -------------------------------------------------------------------------- */
+.question-index {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--terracotta);
+  margin-bottom: 0.75rem;
+}
+.question-text {
+  font-family: var(--font-heading);
+  font-size: clamp(1.5rem, 3.2vw, 2.1rem);
   font-weight: 600;
-  text-transform: capitalize;
+  line-height: 1.35;
+  color: var(--ink);
+  letter-spacing: -0.01em;
 }
 
-.status-draft {
-  background: rgba(148, 163, 184, 0.15);
-  color: #cbd5e1;
+/* --------------------------------------------------------------------------
+   Doctor world — deep indigo instrument panel.
+   Apply .doc-world on a wrapper to switch the palette to the dark clinical
+   theme without touching component markup.
+   -------------------------------------------------------------------------- */
+.doc-world {
+  background: var(--doc-bg);
+  background-image:
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.012) 0 1px, transparent 1px 3px);
+  color: var(--doc-text);
+  border-radius: var(--radius-lg);
+  padding: 2rem;
+}
+.doc-world h2, .doc-world h3, .doc-world h4 { color: var(--doc-text); }
+.doc-world .muted { color: var(--doc-muted); }
+.doc-world .faint { color: var(--doc-faint); }
+
+.queue-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+.queue-table th, .queue-table td { padding: 0.9rem 1.1rem; text-align: left; border-bottom: 1px solid var(--doc-line); color: var(--doc-text); }
+.queue-table th { color: var(--doc-faint); font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; }
+.queue-table tbody tr { transition: background 0.15s var(--ease); }
+.queue-table tbody tr:hover { background: rgba(255, 255, 255, 0.035); }
+
+.status-badge { padding: 0.22rem 0.7rem; border-radius: var(--radius-full); font-size: 0.78rem; font-weight: 600; text-transform: capitalize; border: 1px solid transparent; }
+.status-draft    { background: rgba(151, 160, 184, 0.15); color: var(--doc-muted); border-color: rgba(151, 160, 184, 0.3); }
+.status-reviewed { background: var(--saffron-wash); color: #E4C27E; border-color: rgba(214, 168, 79, 0.4); }
+.status-approved { background: rgba(120, 155, 120, 0.18); color: #A9C4A9; border-color: rgba(120, 155, 120, 0.45); }
+
+/* Triage flags — terracotta/amber washes, never large red panels */
+.flag-attention {
+  background: var(--saffron-wash);
+  border: 1px solid rgba(214, 168, 79, 0.45);
+  border-left: 3px solid var(--saffron);
+  color: #E4C27E;
+  padding: 0.7rem 1rem;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: 0.9rem;
+}
+.flag-critical {
+  background: rgba(201, 106, 74, 0.14);
+  border: 1px solid rgba(201, 106, 74, 0.5);
+  border-left: 3px solid var(--terracotta);
+  color: #EBA28B;
+  padding: 0.9rem 1.1rem;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
 
-.status-reviewed {
-  background: rgba(245, 158, 11, 0.15);
-  color: #fde047;
+/* --------------------------------------------------------------------------
+   Doctor view — snapshot strip, SOCRATES slots, evidence drawer.
+   Structured information architecture, not floating cards.
+   -------------------------------------------------------------------------- */
+.snap-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
+  border: 1px solid var(--doc-line);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.02);
+}
+.snap-cell {
+  padding: 0.95rem 1.1rem;
+  border-right: 1px solid var(--doc-line);
+  border-bottom: 1px solid var(--doc-line);
+  min-width: 0;
+}
+.snap-cell:last-child { border-right: none; }
+.snap-cell-label {
+  font-size: 0.66rem;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--doc-faint);
+  font-weight: 700;
+  margin-bottom: 0.3rem;
+}
+.snap-cell-value { color: var(--doc-text); font-size: 0.95rem; overflow-wrap: break-word; }
+
+.soc-slot {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--doc-line);
+  border-radius: var(--radius-md);
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  transition: border-color 0.18s var(--ease);
+  min-width: 0;
+}
+.soc-slot:hover { border-color: rgba(255, 255, 255, 0.22); }
+.soc-slot.is-confirmed { border-color: rgba(120, 155, 120, 0.45); }
+.soc-slot.is-alert { border-color: rgba(201, 106, 74, 0.55); background: rgba(201, 106, 74, 0.07); }
+.soc-slot.is-unclear { border-color: rgba(214, 168, 79, 0.45); }
+.soc-letter {
+  background: rgba(139, 151, 201, 0.18);
+  color: #AEB9E4;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.08rem 0.34rem;
+  border-radius: 4px;
+}
+.soc-textarea {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 4px;
+  padding: 0.4rem 0.55rem;
+  color: var(--doc-text);
+  font-size: 0.85rem;
+  resize: none;
+  outline: none;
+  font-family: var(--font-body);
+}
+.soc-textarea:focus { border-color: rgba(139, 151, 201, 0.55); }
+.soc-textarea::placeholder { color: var(--doc-faint); }
+.soc-status-btn {
+  background: transparent;
+  border-radius: var(--radius-full);
+  padding: 0.14rem 0.5rem;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: all 0.15s var(--ease);
+}
+.soc-status-btn.st-confirmed { background: rgba(120, 155, 120, 0.16); color: #A9C4A9; border: 1px solid rgba(120, 155, 120, 0.4); }
+.soc-status-btn.st-alert { background: rgba(201, 106, 74, 0.18); color: #E8A18B; border: 1px solid rgba(201, 106, 74, 0.45); }
+.soc-status-btn.st-unclear { background: rgba(214, 168, 79, 0.16); color: #E4C27E; border: 1px solid rgba(214, 168, 79, 0.4); }
+.soc-status-btn.st-none { background: rgba(151, 160, 184, 0.1); color: var(--doc-faint); border: 1px solid rgba(151, 160, 184, 0.25); }
+
+/* Evidence citation chips — academic-citation feel, clickable */
+.evidence-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: transparent;
+  border: 1px dashed rgba(139, 151, 201, 0.45);
+  color: #AEB9E4;
+  border-radius: 4px;
+  padding: 0.1rem 0.45rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s var(--ease);
+}
+.evidence-chip:hover { border-style: solid; border-color: #AEB9E4; background: rgba(139, 151, 201, 0.12); }
+
+/* Evidence drawer — slides in from the right over a dim scrim */
+.evidence-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(9, 13, 26, 0.6);
+  z-index: 90;
+  animation: fadeIn 0.18s var(--ease);
+}
+.evidence-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(430px, 94vw);
+  background: var(--doc-surface);
+  border-left: 1px solid var(--doc-line);
+  box-shadow: var(--shadow-doc);
+  z-index: 91;
+  padding: 1.6rem 1.7rem;
+  overflow-y: auto;
+  animation: drawerIn 0.22s var(--ease);
+}
+@keyframes drawerIn { from { transform: translateX(24px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.evidence-quote {
+  border-left: 3px solid var(--terracotta);
+  background: rgba(201, 106, 74, 0.08);
+  padding: 0.7rem 0.9rem;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  color: var(--doc-text);
+  font-size: 0.95rem;
+  line-height: 1.6;
 }
 
-.status-approved {
-  background: rgba(16, 185, 129, 0.15);
-  color: #6ee7b7;
+/* Review-before-approval modal panel */
+.approve-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(9, 13, 26, 0.65);
+  z-index: 92;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  animation: fadeIn 0.15s var(--ease);
+}
+.approve-panel {
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-doc);
+  width: min(560px, 100%);
+  max-height: 88vh;
+  overflow-y: auto;
+  padding: 1.8rem 2rem;
+  animation: drawerIn 0.2s var(--ease);
+}
+
+/* --------------------------------------------------------------------------
+   Error banner (patient side) — calm, warm, never alarming red.
+   -------------------------------------------------------------------------- */
+.notice {
+  background: var(--saffron-wash);
+  border: 1px solid rgba(214, 168, 79, 0.45);
+  color: #7A5F1E;
+  padding: 0.8rem 1.1rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.92rem;
+}
+
+/* --------------------------------------------------------------------------
+   Responsive kiosk behavior
+   -------------------------------------------------------------------------- */
+@media (max-width: 900px) {
+  /* Editorial two-column screens collapse gracefully on narrow kiosks/tablets */
+  main > div { flex-wrap: wrap !important; }
+  .lang-options { grid-template-columns: 1fr; }
+  .lang-option { border-right: none; border-bottom: 1px solid var(--line); }
+  .lang-option:last-child { border-bottom: none; }
+  .role-grid { flex-direction: column; }
+  .role-card { border-right: none; border-bottom: 1px solid var(--line); }
+  .role-card:last-child { border-bottom: none; }
+  .navbar { padding: 0.9rem 1.2rem; }
+  .brand-tagline { display: none; }
+}
+
+@media (max-width: 600px) {
+  /* Phone-narrow kiosks: let the navbar breathe onto two rows */
+  .navbar { flex-wrap: wrap; gap: 0.5rem; padding: 0.7rem 1rem; }
+  .nav-controls { flex-wrap: wrap; }
+  .brand { font-size: 1.15rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }

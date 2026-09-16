@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { I18nProvider, useLanguage, normalizeLanguage, LANGUAGE_LIST } from './i18n';
 import RoleSelect from './components/RoleSelect';
+import BrandMark from './components/BrandMark';
 import LanguageSelect from './components/LanguageSelect';
 import ChiefComplaint from './components/ChiefComplaint';
 import AdaptiveInterview from './components/AdaptiveInterview';
@@ -235,7 +236,7 @@ function KioskApp() {
       {/* Top Navbar */}
       <header className="navbar">
         <div className="brand" onClick={() => setActiveRole('none')} style={{ cursor: 'pointer' }}>
-          <span className="brand-icon">🩺</span>
+          <span className="brand-icon"><BrandMark size={26} /></span>
           <span>MediKiosk</span>
         </div>
 
@@ -249,19 +250,20 @@ function KioskApp() {
               value={selectedLanguage}
               onChange={(e) => changeLanguage(e.target.value)}
               style={{
-                background: 'rgba(6, 182, 212, 0.15)',
-                color: 'var(--accent-cyan)',
-                border: '1px solid rgba(6, 182, 212, 0.4)',
+                background: 'var(--terracotta-wash)',
+                color: 'var(--terracotta-deep)',
+                border: '1px solid rgba(201, 106, 74, 0.4)',
                 borderRadius: 'var(--radius-full)',
                 padding: '0.35rem 0.8rem',
                 fontSize: '0.85rem',
+                fontWeight: 600,
                 cursor: 'pointer',
                 outline: 'none'
               }}
             >
               {LANGUAGE_LIST.map((l) => (
-                <option key={l.code} value={l.code} style={{ background: '#0f172a', color: '#e2e8f0' }}>
-                  {l.flag} {l.native}
+                <option key={l.code} value={l.code}>
+                  {l.native}
                 </option>
               ))}
             </select>
@@ -281,13 +283,13 @@ function KioskApp() {
           )}
 
           {activeRole === 'patient' && (
-            <span style={{ fontSize: '0.85rem', color: 'var(--accent-cyan)', background: 'rgba(6, 182, 212, 0.15)', padding: '0.3rem 0.8rem', borderRadius: 'var(--radius-full)' }}>
+            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--sage)', background: 'var(--sage-wash)', padding: '0.3rem 0.8rem', borderRadius: 'var(--radius-full)', border: '1px solid rgba(120, 155, 120, 0.35)' }}>
               {t('nav.patientMode', { lang: langConfig.native })}
             </span>
           )}
 
           {activeRole === 'doctor' && (
-            <span style={{ fontSize: '0.85rem', color: 'var(--accent-indigo)', background: 'rgba(99, 102, 241, 0.15)', padding: '0.3rem 0.8rem', borderRadius: 'var(--radius-full)' }}>
+            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--indigo-800)', background: 'var(--indigo-100)', padding: '0.3rem 0.8rem', borderRadius: 'var(--radius-full)' }}>
               {t('nav.doctorMode')}
             </span>
           )}
