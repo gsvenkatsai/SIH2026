@@ -1,23 +1,25 @@
 import os
 import json
 import base64
+import math
 import re
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
 from groq import Groq
-from app.trees import evaluate_cardiac_triage, SOCRATES_DIMENSIONS, SOCRATES_METADATA, normalize_dimension, is_dimension_filled, is_negated
+from app.languages import get_asr_language, get_language_config
+from app.trees import evaluate_cardiac_triage, SOCRATES_DIMENSIONS, SOCRATES_METADATA, is_negated
 
 load_dotenv()
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 # Model Tiering Architecture:
-# 1. FAST_MODEL_NAME: Ultra-low latency (~200ms), high rate-limit ceiling for real-time interview slot filling and question generation
-FAST_MODEL_NAME = os.getenv("GROQ_FAST_MODEL", "llama-3.1-8b-instant")
+# 1. FAST_MODEL_NAME: Ultra-low latency, high rate-limit ceiling for real-time interview slot filling and question generation
+FAST_MODEL_NAME = os.getenv("GROQ_FAST_MODEL", "openai/gpt-oss-20b")
 
 # 2. SYNTHESIS_MODEL_NAME: High-capacity clinical reasoning model for multi-document EHR synthesis & doctor final record compilation
-SYNTHESIS_MODEL_NAME = os.getenv("GROQ_SYNTHESIS_MODEL", "llama-3.3-70b-versatile")
+SYNTHESIS_MODEL_NAME = os.getenv("GROQ_SYNTHESIS_MODEL", "openai/gpt-oss-120b")
 
 # Default alias for backwards compatibility
 MODEL_NAME = FAST_MODEL_NAME
@@ -30,33 +32,75 @@ def get_groq_client() -> Optional[Groq]:
 # ==========================================
 # ASR: Groq Whisper-large-v3 Audio Transcription
 # ==========================================
-def transcribe_audio(file_content: bytes, filename: str, language: str = "en") -> str:
+class TranscriptionError(Exception):
+    """Raised when audio transcription fails. `kind` drives patient-friendly UI messaging."""
+
+    def __init__(self, message: str, kind: str = "transcription_failed"):
+        super().__init__(message)
+        self.kind = kind  # "no_api_key" | "empty_audio" | "asr_unavailable" | "unsupported_format" | "transcription_failed"
+
+
+def transcribe_audio(file_content: bytes, filename: str, language: str = "en-IN") -> Dict[str, Any]:
+    """
+    Transcribes patient audio via Groq Whisper-large-v3.
+
+    The selected patient language is passed as an explicit ASR hint (never
+    relied on auto-detection alone). Whisper may still transcribe occasional
+    mixed-language speech (e.g. Kannada containing English medical terms);
+    such transcripts are returned as-is, never rejected.
+
+    Returns: {"transcript": str, "language": str, "confidence": float}
+    Raises TranscriptionError with a UI-safe `kind` on failure.
+    """
     client = get_groq_client()
     if not client:
-        return "Audio recorded (offline mode)"
+        raise TranscriptionError("Speech recognition is not configured on this server.", kind="no_api_key")
 
-    lang_code = language.lower().strip()
-    if lang_code in ["english", "en"]:
-        lang_code = "en"
-    elif lang_code in ["hindi", "hi"]:
-        lang_code = "hi"
-    elif lang_code in ["kannada", "kn"]:
-        lang_code = "kn"
-    else:
-        lang_code = "en"
+    if not file_content:
+        raise TranscriptionError("No audio was captured.", kind="empty_audio")
+
+    canonical = get_language_config(language)["code"]
+    lang_code = get_asr_language(language)  # "en" | "hi" | "kn"
 
     try:
+        # verbose_json includes segment-level avg_logprob, from which we derive a
+        # rough confidence signal for the doctor-facing evidence metadata.
         response = client.audio.transcriptions.create(
             file=(filename, file_content),
             model="whisper-large-v3",
             language=lang_code,
-            response_format="json"
+            response_format="verbose_json"
         )
-        text = getattr(response, "text", "") or ""
-        return text.strip()
+        text = (getattr(response, "text", "") or "").strip()
+        confidence = 0.0
+        segments = getattr(response, "segments", None) or []
+        logprobs = [s.get("avg_logprob") for s in segments if isinstance(s, dict) and s.get("avg_logprob") is not None]
+        if logprobs:
+            avg_logprob = sum(logprobs) / len(logprobs)
+            confidence = max(0.0, min(1.0, round(math.exp(avg_logprob), 2)))
+        elif text:
+            confidence = 0.85  # transcript present but no segment metadata available
+
+        return {
+            "transcript": text,
+            "language": canonical,
+            "confidence": confidence,
+        }
+    except TranscriptionError:
+        raise
     except Exception as e:
-        print(f"[Groq Whisper Error] Language '{lang_code}' transcription failed: {e}")
-        raise e
+        message = str(e)
+        lowered = message.lower()
+        print(f"[Groq Whisper Error] Language '{lang_code}' transcription failed: {message}")
+        if "api key" in lowered or "401" in lowered or "unauthorized" in lowered:
+            kind = "no_api_key"
+        elif "415" in lowered or "format" in lowered or "could not be decoded" in lowered:
+            kind = "unsupported_format"
+        elif "connection" in lowered or "timeout" in lowered or "unreachable" in lowered:
+            kind = "asr_unavailable"
+        else:
+            kind = "transcription_failed"
+        raise TranscriptionError(message, kind=kind)
 
 # ==========================================
 # ==========================================
@@ -351,6 +395,12 @@ def generate_socrates_interview_question(
     default_question = tree_question.get("question", "Could you describe your symptoms further?")
     question_id = tree_question.get("id", f"q_{target_dimension}")
 
+    known_facts = []
+    if socrates_state:
+        for dim, item in socrates_state.items():
+            if isinstance(item, dict) and item.get("status") == "filled" and item.get("value"):
+                known_facts.append(f"{dim}: {item['value']}")
+
     if not client:
         if known_facts:
             lead_in = f"I understand your discomfort involves {known_facts[0].split(':')[-1].strip().lower()}. "
@@ -363,10 +413,11 @@ def generate_socrates_interview_question(
             "question": default_question
         }
 
+    canonical_lang = get_language_config(language)["code"]
     lang_instruction = "English"
-    if language.lower() in ["hindi", "hi"]:
+    if canonical_lang == "hi-IN":
         lang_instruction = "Hindi (in natural Devanagari script, empathetic and clear for patients)"
-    elif language.lower() in ["kannada", "kn"]:
+    elif canonical_lang == "kn-IN":
         lang_instruction = "Kannada (in natural Kannada script, empathetic and polite for patients)"
 
     system_prompt = (
@@ -378,12 +429,6 @@ def generate_socrates_interview_question(
         "3. Clear Targeted Inquiry: Transition smoothly to ask the target question naturally and compassionately in the requested language.\n"
         "4. Output strictly valid JSON with keys: 'question_id', 'question'."
     )
-
-    known_facts = []
-    if socrates_state:
-        for dim, item in socrates_state.items():
-            if isinstance(item, dict) and item.get("status") == "filled" and item.get("value"):
-                known_facts.append(f"{dim}: {item['value']}")
 
     user_prompt = (
         f"Target SOCRATES Dimension: {target_dimension.upper()}\n"
@@ -796,7 +841,7 @@ def merge_record_and_flag(
         "    \"exacerbating\": {\"dimension\": \"exacerbating\", \"label\": \"Exacerbating / Relieving Factors\", \"value\": string, \"status\": string, \"source\": string, \"source_icon\": string, \"source_details\": string, \"confidence\": number},\n"
         "    \"severity\": {\"dimension\": \"severity\", \"label\": \"Severity\", \"value\": string, \"status\": string, \"source\": string, \"source_icon\": string, \"source_details\": string, \"confidence\": number}\n"
         "  },\n"
-        "  \"interview_facts\": [{\"fact\": string, \"source\": \"interview\", \"icon\": \"🎤\", \"timestamp\": string}],\n"
+        "  \"interview_facts\": [{\"fact\": string, \"source\": \"interview\", \"icon\": \"🎤\", \"input_mode\": \"voice\"|\"text\" (copy from the response when present), \"language\": string (copy from the response when present), \"original_transcript\": string (verbatim patient transcript for voice answers, else omit), \"timestamp\": string}],\n"
         "  \"unclear_facts\": [{\"question\": string, \"answer\": string, \"issue\": string}],\n"
         "  \"document_facts\": [{\"fact\": string, \"source\": \"document\", \"icon\": \"📄\", \"filename\": string}],\n"
         "  \"contradiction_flags\": [string],\n"
@@ -873,6 +918,9 @@ def merge_record_and_flag(
                 "fact": f"{r.get('question')}: {r.get('answer')}",
                 "source": "interview",
                 "icon": "🎤",
+                "input_mode": r.get("input_mode") or "text",
+                "language": r.get("language"),
+                "original_transcript": r.get("original_transcript"),
                 "timestamp": str(r.get("timestamp", ""))
             })
 

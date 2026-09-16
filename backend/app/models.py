@@ -42,6 +42,10 @@ class InterviewResponse(Base):
     question_id = Column(String(100), nullable=False)
     question = Column(Text, nullable=False)
     answer = Column(Text, nullable=False)
+    input_mode = Column(String(20), nullable=False, default="text")  # "text" | "voice"
+    language = Column(String(10), nullable=True)  # canonical code captured with the response, e.g. "kn-IN"
+    original_transcript = Column(Text, nullable=True)  # verbatim ASR transcript for voice responses (never overwritten)
+    transcription_confidence = Column(Float, nullable=True)  # ASR-derived confidence for voice responses
     timestamp = Column(DateTime, default=utc_now)
 
     visit = relationship("Visit", back_populates="responses")

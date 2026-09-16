@@ -2,24 +2,24 @@ import React from 'react';
 
 export default function DoctorQueue({ queue, onSelectVisit, onRefresh }) {
   return (
-    <div style={{ maxWidth: '980px', margin: '2rem auto' }}>
-      <div className="glass-card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+    <div className="doc-world" style={{ maxWidth: '1040px', margin: '2rem auto', padding: '2rem 2.2rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', gap: '1rem', flexWrap: 'wrap' }}>
           <div>
-            <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '2rem', marginBottom: '0.25rem' }}>
-              👨‍⚕️ Physician Verification Queue
+            <div className="kicker" style={{ color: '#E4C27E', marginBottom: '0.4rem' }}>Clinical Review</div>
+            <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.8rem', marginBottom: '0.2rem' }}>
+              Physician Verification Queue
             </h2>
-            <p style={{ color: 'var(--text-muted)' }}>
-              Select a patient intake record to review source-tagged evidence, check flags, edit, and approve.
+            <p className="muted" style={{ fontSize: '0.92rem' }}>
+              Source-tagged evidence, flags, and approvals — verified before anything reaches the record.
             </p>
           </div>
-          <button className="btn btn-secondary" onClick={onRefresh}>
+          <button className="btn btn-outline" onClick={onRefresh}>
             🔄 Refresh Queue
           </button>
         </div>
 
         {queue.length === 0 ? (
-          <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-subtle)' }}>
+          <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--doc-faint)' }}>
             No patient intake records in queue. Start a patient intake session to populate queue.
           </div>
         ) : (
@@ -27,9 +27,10 @@ export default function DoctorQueue({ queue, onSelectVisit, onRefresh }) {
             <table className="queue-table">
               <thead>
                 <tr>
-                  <th>Visit ID</th>
-                  <th>Patient Name</th>
+                  <th>Patient</th>
+                  <th>Token</th>
                   <th>Chief Complaint</th>
+                  <th>Attention</th>
                   <th>Docs</th>
                   <th>Status</th>
                   <th>Action</th>
@@ -38,17 +39,26 @@ export default function DoctorQueue({ queue, onSelectVisit, onRefresh }) {
               <tbody>
                 {queue.map((item) => (
                   <tr key={item.visit_id}>
-                    <td style={{ fontWeight: 600, color: 'var(--accent-cyan)' }}>
-                      #{item.visit_id}
-                    </td>
-                    <td style={{ fontWeight: 500, color: '#f8fafc' }}>
+                    <td style={{ fontWeight: 600 }}>
                       {item.patient_name}
                     </td>
-                    <td style={{ color: 'var(--text-muted)' }}>
+                    <td style={{ color: 'var(--doc-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                      #A{String(item.visit_id).padStart(4, '0')}
+                    </td>
+                    <td style={{ color: 'var(--doc-muted)', maxWidth: '260px' }}>
                       {item.chief_complaint}
                     </td>
                     <td>
-                      <span className="tag-document">📄 {item.document_count}</span>
+                      {item.red_flag_alert ? (
+                        <span className="tag-interview" style={{ fontSize: '0.72rem' }}>🚨 Prompt assessment</span>
+                      ) : item.triage_level === 'ALERT' ? (
+                        <span className="tag-document" style={{ fontSize: '0.72rem' }}>⚠ Attention</span>
+                      ) : (
+                        <span style={{ color: 'var(--doc-faint)', fontSize: '0.85rem' }}>—</span>
+                      )}
+                    </td>
+                    <td>
+                      <span className="tag-document" style={{ fontSize: '0.72rem' }}>📄 {item.document_count}</span>
                     </td>
                     <td>
                       <span className={`status-badge status-${item.status}`}>
@@ -57,11 +67,11 @@ export default function DoctorQueue({ queue, onSelectVisit, onRefresh }) {
                     </td>
                     <td>
                       <button
-                        className="btn btn-cyan"
-                        style={{ padding: '0.4rem 0.9rem', fontSize: '0.85rem' }}
+                        className="btn btn-primary"
+                        style={{ padding: '0.4rem 0.9rem', fontSize: '0.83rem' }}
                         onClick={() => onSelectVisit(item.visit_id)}
                       >
-                        Review Record →
+                        Review →
                       </button>
                     </td>
                   </tr>
@@ -70,7 +80,6 @@ export default function DoctorQueue({ queue, onSelectVisit, onRefresh }) {
             </table>
           </div>
         )}
-      </div>
     </div>
   );
 }

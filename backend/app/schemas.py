@@ -118,6 +118,11 @@ class InterviewAnswerRequest(BaseModel):
     question_id: str
     answer: str
     shorten_intake: Optional[bool] = False
+    # Voice-origin metadata (present only when the answer was captured by voice).
+    input_mode: Optional[str] = Field("text", description="Input modality: 'text' or 'voice'")
+    language: Optional[str] = Field(None, description="Canonical language code used for this response, e.g. 'kn-IN'")
+    original_transcript: Optional[str] = Field(None, description="Verbatim ASR transcript preserved as source evidence")
+    transcription_confidence: Optional[float] = Field(None, ge=0.0, le=1.0, description="ASR confidence for voice answers")
 
 class InterviewAnswerResponse(BaseModel):
     visit_id: int
@@ -144,6 +149,18 @@ class InterviewVoiceAnswerResponse(BaseModel):
     triage_message: Optional[str] = None
     red_flag_alert: bool = False
     can_shorten: bool = False
+
+# --- Voice Transcription (ASR-only) Schemas ---
+class VoiceTranscribeResponse(BaseModel):
+    """Response for POST /voice/transcribe — transcription only, no clinical interpretation.
+
+    Keeping ASR separate from the interview pipeline preserves the architectural
+    boundary: Audio -> ASR -> Transcript -> (separate) clinical interpretation.
+    """
+    success: bool
+    language: str
+    transcript: str
+    confidence: float = Field(0.0, ge=0.0, le=1.0)
 
 # --- Document Extraction Schemas ---
 class DocumentExtractResponse(BaseModel):
@@ -178,6 +195,14 @@ class DoctorApproveRequest(BaseModel):
     visit_id: int
     edits: Optional[Dict[str, Any]] = None
     notes: Optional[str] = None
+
+# --- System Configuration Schemas ---
+class LanguageInfo(BaseModel):
+    code: str
+    name: str
+    native: str
+    short_code: str
+    flag: str
 
 class DoctorApproveResponse(BaseModel):
     visit_id: int

@@ -139,6 +139,18 @@ npm run dev -- --host 0.0.0.0 --port 5173
 
 ---
 
+## 🎙️ Troubleshooting Voice & Microphone
+
+| Problem | Fix |
+|---|---|
+| **Microphone permission denied** | The kiosk shows a translated message with a typed-answer fallback. To re-enable: click the 🔒/🎤 icon in the browser address bar → Allow microphone → reload. |
+| **"No microphone found"** | Connect a mic and check OS input device settings, then tap the mic again. |
+| **"We didn't hear anything"** | Speak a little louder/closer to the mic; the recording must contain audio. |
+| **Recording stops by itself** | Recordings are capped at 30 seconds for kiosk use — tap the stop button earlier and the answer will transcribe normally. |
+| **Transcription fails / service unavailable** | Check `GROQ_API_KEY` is set and the backend has internet access. The typed-answer path always remains available. |
+| **No voice playback of questions** | The browser has no Indian-language TTS voice installed. Install one (e.g. Windows: Settings → Time & Language → Speech) or use Chrome/Edge which ship `hi-IN`/`kn-IN` voices. Text mode remains fully functional. |
+| **Wrong language transcribed** | Ensure the language selected on the first screen matches the language being spoken — it is passed as the Whisper language hint. |
+
 ## 🧪 Running Automated Tests
 
 MediKiosk includes a comprehensive test suite (38 automated tests across 9 suites) verifying clinical negation boundaries, 8-dimension SOCRATES extraction, cardiac red flag triage, model tiering, symptom revisions, and clarification retries.
@@ -155,15 +167,74 @@ pytest backend/test_phase1_socrates.py \
        backend/test_phase2_universal_socrates.py \
        backend/test_phase3_tiering_revisions.py \
        backend/test_phase4_clarification_contradictions.py \
-       backend/test_red_flag_triage.py
+       backend/test_red_flag_triage.py \
+       backend/test_multilingual_voice.py
 ```
 
 ### 🪟 Windows (PowerShell):
 ```powershell
-pytest backend/test_phase1_socrates.py backend/test_socrates_slots.py backend/test_record_merge_matrix.py backend/test_full_socrates_e2e.py backend/test_phase1_negation_isolation.py backend/test_phase2_universal_socrates.py backend/test_phase3_tiering_revisions.py backend/test_phase4_clarification_contradictions.py backend/test_red_flag_triage.py
+pytest backend/test_phase1_socrates.py backend/test_socrates_slots.py backend/test_record_merge_matrix.py backend/test_full_socrates_e2e.py backend/test_phase1_negation_isolation.py backend/test_phase2_universal_socrates.py backend/test_phase3_tiering_revisions.py backend/test_phase4_clarification_contradictions.py backend/test_red_flag_triage.py backend/test_multilingual_voice.py
 ```
 
 ---
+
+## 🌐 Multilingual Support (English / हिन्दी / ಕನ್ನಡ)
+
+MediKiosk's patient flow is fully multilingual. The patient picks **English, हिन्दी, or ಕನ್ನಡ** on the first screen, and every subsequent patient-facing screen — consent, chief complaint, adaptive interview questions, buttons, voice status, error messages, and summary — renders in that language.
+
+### How it works
+
+```text
+canonical language code (en-IN / hi-IN / kn-IN)
+        │
+        ├── frontend i18n layer (src/i18n/)  → all static patient UI strings
+        ├── ASR hint (mapped to en/hi/kn)    → Whisper transcription
+        ├── TTS voice selection              → question & transcript readback
+        └── per-response metadata            → doctor sees voice-origin evidence
+```
+
+- **Canonical codes everywhere:** language is stored as `en-IN` / `hi-IN` / `kn-IN` (legacy names like `"Kannada"` are auto-normalized for backwards compatibility). The single source of truth is `backend/app/languages.py`, mirrored by `frontend/src/i18n/` and exposed via `GET /config/languages`.
+- **Questions stay framework-constrained:** the same language-independent `question_id` (e.g. `cp_radiation`) is phrased by the LLM in the selected language. Question IDs are never translated.
+- **Mid-interview switching:** changing language during an interview keeps all collected SOCRATES data and re-renders in the new language.
+- **Never shown to patients:** `undefined`, raw API errors, or internal status codes — missing translations fall back to English.
+
+## 🎙️ Voice Pipeline
+
+Voice is a first-class input modality feeding the **same** clinical engine as typed answers:
+
+```text
+Microphone (MediaRecorder, 30s cap)
+        ↓  audio/webm
+FastAPI  POST /voice/transcribe      ← ASR only — no clinical logic here
+        ↓
+Groq Whisper-large-v3 (language hint: en/hi/kn)
+        ↓  transcript + confidence
+Patient confirms / edits / retries    ← audio confirmation (PRD §5.2)
+        ↓
+POST /interview/answer               ← SAME pipeline as text input
+        ↓
+SOCRATES extraction → triage → structured history
+```
+
+Key properties:
+- **Groq key never leaves the server** — the browser only talks to FastAPI.
+- **Original transcripts are preserved verbatim** (e.g. `"ನೋವು ಎಡಗೈಗೆ ಹೋಗುತ್ತದೆ"`) alongside the structured interpretation — never overwritten by translation.
+- **Mixed-language speech is accepted** (e.g. Kannada containing "chest pain") — the transcript is never rejected.
+- **Voice evidence on the doctor dashboard:** voice-derived facts show `🎤 Voice — Kannada`, the original transcript, and the ASR confidence.
+
+### Voice error handling
+
+All failures map to translated, patient-friendly messages (never raw errors): permission denied, no microphone, empty recording, 30s timeout, network failure, ASR unavailable (typed-answer fallback always remains).
+
+## 🔊 Text-to-Speech (Question Readback)
+
+Questions and transcript confirmations are spoken aloud in the selected language:
+
+1. **Browser Web Speech API** with an exact `en-IN` / `hi-IN` / `kn-IN` voice when available.
+2. **Language-family fallback** (any `kn`/`hi`/`en` voice) otherwise.
+3. **Text-only fallback** — if no voice exists, a small non-blocking notice is shown and the full text interface remains usable. The app NEVER becomes unusable due to missing TTS.
+
+Controls: 🔊 Repeat Question and 🔇 Stop Audio accompany every question. Readback fires once per question (guarded against re-render double-play).
 
 ## 🌟 Clinical Architecture & Features
 
@@ -189,8 +260,9 @@ Every patient intake maps to the standardized clinical framework:
 - Prompts immediate emergency triage notifications (`CRITICAL_RED_FLAG`) and allows immediate intake shortening to expedite physician review.
 
 ### 4. ⚡ Tiered LLM Architecture
-- **Dialogue & Slot Extraction**: Powered by `llama-3.1-8b-instant` for sub-second response times and token efficiency during live kiosk interactions.
-- **Clinical EHR Synthesis**: Powered by `llama-3.3-70b-versatile` for high-depth evidence synthesis, cross-document reconciliation, and contradiction detection.
+- **Dialogue & Slot Extraction**: Powered by `openai/gpt-oss-20b` for sub-second response times and token efficiency during live kiosk interactions.
+- **Clinical EHR Synthesis**: Powered by `openai/gpt-oss-120b` for high-depth evidence synthesis, cross-document reconciliation, and contradiction detection.
+- Model IDs are overridable via `GROQ_FAST_MODEL` / `GROQ_SYNTHESIS_MODEL` env vars (Groq retires models periodically — if a model 404s, update these).
 
 ### 5. 🔄 Audit Trail & Verbal Self-Contradiction Detection
 - When a patient updates a symptom report during intake (e.g. initial pain reported as *2/10*, later escalated to *9/10*), the system preserves timestamped revision history.
@@ -220,32 +292,40 @@ Every patient intake maps to the standardized clinical framework:
 │   ├── Dockerfile               # Production container for FastAPI backend
 │   ├── requirements.txt         # Python dependencies
 │   ├── app/
-│   │   ├── main.py              # FastAPI application & CORS configuration
+│   │   ├── main.py              # FastAPI application, CORS & /config/languages
 │   │   ├── database.py          # SQLite engine & SQLAlchemy 2.0 ORM session
-│   │   ├── models.py            # Patient, Visit, InterviewResponse, Document models
+│   │   ├── languages.py         # Canonical language config (en-IN/hi-IN/kn-IN)
+│   │   ├── models.py            # Patient, Visit, InterviewResponse (+voice metadata), Document models
 │   │   ├── schemas.py           # Pydantic request/response schemas & SOCRATES models
 │   │   ├── trees.py             # Decision trees, NegEx negation engine & triage rules
 │   │   ├── groq_service.py      # LLM dialogue, Whisper ASR, OCR & EHR synthesis
 │   │   └── routes/
-│   │       ├── interview.py     # Q&A progression, text & voice endpoints
+│   │       ├── interview.py     # Q&A progression, text & voice answer endpoints
+│   │       ├── voice.py         # POST /voice/transcribe (ASR-only)
 │   │       ├── document.py      # Document upload & Groq Vision OCR
 │   │       ├── record.py        # EHR synthesis & clinical matrix generation
 │   │       └── doctor.py        # Physician queue, edits, and sign-off
-│   └── test_*.py                # 9 automated unit/integration test suites
+│   └── test_*.py                # 10 automated unit/integration test suites
 └── frontend/
     ├── Dockerfile               # Production container with Nginx reverse proxy
     ├── nginx.conf               # Nginx server configuration (port 5173)
     ├── package.json             # React 19 & Vite dependencies
     └── src/
         ├── App.jsx              # Main kiosk and doctor portal state router
-        ├── api.js               # Backend API client
+        ├── api.js               # Backend API client (incl. /voice/transcribe)
+        ├── i18n/                # Language config, provider & locale bundles
+        │   ├── index.jsx        #   useLanguage() / t() translation hook
+        │   └── locales/         #   en-IN.json, hi-IN.json, kn-IN.json
+        ├── hooks/
+        │   ├── useVoiceRecorder.js  # MediaRecorder state machine
+        │   └── useTextToSpeech.js   # Web Speech API readback w/ fallbacks
         └── components/          # Kiosk and physician UI components
             ├── RoleSelect.jsx
             ├── LanguageSelect.jsx
             ├── ChiefComplaint.jsx
-            ├── AdaptiveInterview.jsx
+            ├── AdaptiveInterview.jsx  # voice recording + transcript confirmation
             ├── DocumentUpload.jsx
             ├── PatientSummary.jsx
             ├── DoctorQueue.jsx
-            └── DoctorPatientView.jsx
+            └── DoctorPatientView.jsx  # shows 🎤 Voice evidence + transcripts
 ```
