@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from app.database import get_db
+from app.languages import normalize_language
 from app.models import Patient, Visit, InterviewResponse
 from app.schemas import (
     InterviewStartRequest,
@@ -26,10 +27,10 @@ router = APIRouter(prefix="/interview", tags=["Interview"])
 
 @router.post("/start", response_model=InterviewStartResponse)
 def start_interview(payload: InterviewStartRequest, db: Session = Depends(get_db)):
-    # Create Patient record
+    # Create Patient record (language normalized to canonical code, e.g. "kn-IN")
     patient = Patient(
         name=payload.patient_name or "Anonymous Patient",
-        language=payload.language or "English"
+        language=normalize_language(payload.language)
     )
     db.add(patient)
     db.commit()
@@ -98,7 +99,7 @@ def start_interview(payload: InterviewStartRequest, db: Session = Depends(get_db
         tree_question=next_tree_q,
         history=[],
         socrates_state=socrates_state,
-        language=payload.language or "English"
+        language=patient.language  # canonical code
     )
 
     return InterviewStartResponse(
@@ -120,6 +121,13 @@ def answer_interview(payload: InterviewAnswerRequest, db: Session = Depends(get_
     if not visit:
         raise HTTPException(status_code=404, detail="Visit not found")
 
+    # Mid-interview language switch: persist the new canonical language WITHOUT
+    # touching collected clinical state (socrates_state, responses, triage).
+    if payload.language and normalize_language(payload.language) != (visit.patient.language if visit.patient else None):
+        if visit.patient:
+            visit.patient.language = normalize_language(payload.language)
+            db.commit()
+
     tree_key = get_tree_key(visit.chief_complaint)
     tree_questions = DECISION_TREES.get(tree_key, DECISION_TREES["default"])
 
@@ -130,12 +138,17 @@ def answer_interview(payload: InterviewAnswerRequest, db: Session = Depends(get_
     else:
         question_text = payload.question_id
 
-    # Store response
+    # Store response with input-modality and voice evidence metadata
+    is_voice = (payload.input_mode or "text") == "voice"
     response_entry = InterviewResponse(
         visit_id=visit.id,
         question_id=payload.question_id,
         question=question_text,
-        answer=payload.answer
+        answer=payload.answer,
+        input_mode=payload.input_mode or "text",
+        language=normalize_language(payload.language) if payload.language else None,
+        original_transcript=(payload.original_transcript or payload.answer) if is_voice else None,
+        transcription_confidence=payload.transcription_confidence if is_voice else None
     )
     db.add(response_entry)
     db.commit()
@@ -194,7 +207,7 @@ def answer_interview(payload: InterviewAnswerRequest, db: Session = Depends(get_
         answered_ids=answered_ids
     )
 
-    patient_language = visit.patient.language if visit.patient else "English"
+    patient_language = visit.patient.language if visit.patient else "en-IN"
 
     if next_tree_q:
         target_dim = next_tree_q.get("socrates_dimension", next_tree_q.get("category", "general"))
@@ -250,8 +263,16 @@ async def answer_interview_voice(
     if not audio_bytes:
         raise HTTPException(status_code=400, detail="Empty audio file provided")
 
-    # Transcribe audio using Groq Whisper-large-v3
-    transcript = transcribe_audio(audio_bytes, file.filename or "voice_recording.wav", language=language)
+    # Transcribe audio using Groq Whisper-large-v3 (kept for legacy clients; the
+    # recommended flow is POST /voice/transcribe + POST /interview/answer)
+    try:
+        asr = transcribe_audio(audio_bytes, file.filename or "voice_recording.wav", language=language)
+        transcript = asr["transcript"]
+    except Exception:
+        # Legacy behavior preserved: this combined endpoint has always returned the
+        # transcript in the response body; surface a patient-safe failure marker.
+        asr = None
+        transcript = ""
 
     tree_key = get_tree_key(visit.chief_complaint)
     tree_questions = DECISION_TREES.get(tree_key, DECISION_TREES["default"])
@@ -263,12 +284,16 @@ async def answer_interview_voice(
     else:
         question_text = question_id
 
-    # Store response
+    # Store response with voice evidence metadata
     response_entry = InterviewResponse(
         visit_id=visit.id,
         question_id=question_id,
         question=question_text,
-        answer=transcript or "(No speech detected)"
+        answer=transcript or "(No speech detected)",
+        input_mode="voice",
+        language=normalize_language(language),
+        original_transcript=transcript or None,
+        transcription_confidence=(asr.get("confidence") if asr else None)
     )
     db.add(response_entry)
     db.commit()
@@ -327,7 +352,7 @@ async def answer_interview_voice(
         answered_ids=answered_ids
     )
 
-    patient_language = visit.patient.language if visit.patient else "English"
+    patient_language = visit.patient.language if visit.patient else "en-IN"
 
     if next_tree_q:
         target_dim = next_tree_q.get("socrates_dimension", next_tree_q.get("category", "general"))

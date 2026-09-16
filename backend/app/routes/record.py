@@ -21,6 +21,10 @@ def finalize_record(payload: RecordFinalizeRequest, db: Session = Depends(get_db
             "question_id": r.question_id,
             "question": r.question,
             "answer": r.answer,
+            "input_mode": r.input_mode or "text",
+            "language": r.language,
+            "original_transcript": r.original_transcript,
+            "transcription_confidence": r.transcription_confidence,
             "timestamp": r.timestamp.isoformat() if r.timestamp else None
         }
         for r in responses
