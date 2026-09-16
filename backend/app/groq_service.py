@@ -8,7 +8,7 @@ from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
 from groq import Groq
 from app.languages import get_asr_language, get_language_config
-from app.trees import evaluate_cardiac_triage, SOCRATES_DIMENSIONS, SOCRATES_METADATA, normalize_dimension, is_dimension_filled, is_negated
+from app.trees import evaluate_cardiac_triage, SOCRATES_DIMENSIONS, SOCRATES_METADATA, is_negated
 
 load_dotenv()
 

@@ -10,7 +10,7 @@ const JOURNEY_STEPS = [
   { key: 'doctor', label: 'journey.doctor' }
 ];
 
-export default function DocumentUpload({ visitId, onUpload, uploadedDocs, onNext, isLoading }) {
+export default function DocumentUpload({ onUpload, uploadedDocs, onNext, isLoading }) {
   const { t } = useLanguage();
   const [selectedFile, setSelectedFile] = useState(null);
 

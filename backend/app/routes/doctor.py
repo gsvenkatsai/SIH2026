@@ -1,8 +1,8 @@
-from typing import List, Dict, Any
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import Visit, FinalRecord, Document, Patient
+from app.models import Visit, FinalRecord, Document
 from app.schemas import DoctorQueueItem, DoctorApproveRequest, DoctorApproveResponse
 
 router = APIRouter(prefix="/doctor", tags=["Doctor"])

@@ -68,7 +68,6 @@ export function useTextToSpeech(langCode) {
     const synth = window.speechSynthesis;
     if (!synth) {
       setAvailable(false);
-      availableRef.current = false;
       return;
     }
     const voice = pickVoice(voices, langCode);

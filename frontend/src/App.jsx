@@ -29,7 +29,7 @@ export default function App() {
 }
 
 function KioskApp() {
-  const { t, language, setLanguage: setI18nLanguage, config: langConfig } = useLanguage();
+  const { t, setLanguage: setI18nLanguage, config: langConfig } = useLanguage();
   // Navigation / Role states
   const [activeRole, setActiveRole] = useState('none'); // 'none' | 'patient' | 'doctor'
   const [patientStep, setPatientStep] = useState(1); // 1: Complaint, 2: Interview, 3: Upload, 4: Summary
@@ -71,12 +71,6 @@ function KioskApp() {
   const [errorMessage, setErrorMessage] = useState('');
 
   // Auto-fetch Doctor Queue when switching to Doctor role
-  useEffect(() => {
-    if (activeRole === 'doctor') {
-      fetchDoctorQueue();
-    }
-  }, [activeRole]);
-
   const fetchDoctorQueue = async () => {
     try {
       setIsLoading(true);
@@ -90,6 +84,13 @@ function KioskApp() {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (activeRole === 'doctor') {
+      fetchDoctorQueue();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refetch only on role change; adding the fn would loop
+  }, [activeRole]);
 
   // --- Patient Kiosk Handlers ---
   const handleStartInterview = async (chiefComplaint, patientName) => {
@@ -299,14 +300,9 @@ function KioskApp() {
       {/* Main Body Content */}
       <main style={{ flex: 1, padding: '1rem 1.5rem' }}>
         {errorMessage && (
-          <div style={{
+          <div className="notice" style={{
             maxWidth: '800px',
             margin: '1rem auto',
-            background: 'rgba(244, 63, 94, 0.15)',
-            border: '1px solid rgba(244, 63, 94, 0.4)',
-            color: '#fda4af',
-            padding: '1rem',
-            borderRadius: 'var(--radius-md)',
             textAlign: 'center'
           }}>
             ⚠️ {errorMessage}
@@ -363,7 +359,6 @@ function KioskApp() {
 
             {patientStep === 3 && (
               <DocumentUpload
-                visitId={visitId}
                 onUpload={handleUploadDoc}
                 uploadedDocs={uploadedDocs}
                 onNext={handleProceedToSummary}

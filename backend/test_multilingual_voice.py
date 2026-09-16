@@ -155,7 +155,7 @@ def test_voice_transcribe_language_normalized():
 
 def test_answer_accepts_voice_metadata_and_preserves_transcript():
     """Voice answers persist input_mode/language/original_transcript alongside the answer."""
-    from app.database import SessionLocal, engine, Base
+    from app.database import SessionLocal
     from app.models import InterviewResponse
 
     start = client.post("/interview/start", json={
@@ -233,8 +233,6 @@ def test_mid_interview_language_switch_preserves_state():
     })
     visit_id = start.json()["visit_id"]
     question_id = start.json()["question_id"]
-    state_before = start.json()["socrates_state"]
-
     # Answer one question in English, then switch to Kannada on the next answer
     ans1 = client.post("/interview/answer", json={
         "visit_id": visit_id,
@@ -276,14 +274,6 @@ def test_legacy_language_names_still_start_interviews():
             "language": name,
         })
         assert res.status_code == 200
-        from app.database import SessionLocal
-        from app.models import Patient
-        db = SessionLocal()
-        try:
-            p = db.query(Patient).filter(Patient.id == res.json()["visit_id"]).first()
-            # Patient id == visit patient id via visit lookup below
-        finally:
-            db.close()
         # (verification of stored code happens via the visit endpoint below)
 
 
