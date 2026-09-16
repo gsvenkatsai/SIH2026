@@ -1,2 +1,61 @@
-backend/.env
+# Environment variables
 .env
+backend/.env
+frontend/.env
+frontend/.env.local
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+backend/venv/
+ENV/
+env/
+
+# SQLite databases
+*.db
+*.sqlite
+*.sqlite3
+medikiosk.db
+backend/medikiosk.db
+
+# Runtime uploads
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Testing caches
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node & Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+*.log
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

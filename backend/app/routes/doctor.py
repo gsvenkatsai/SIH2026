@@ -10,17 +10,33 @@ router = APIRouter(prefix="/doctor", tags=["Doctor"])
 @router.get("/queue", response_model=List[DoctorQueueItem])
 def get_doctor_queue(db: Session = Depends(get_db)):
     visits = db.query(Visit).order_by(Visit.created_at.desc()).all()
+
+    # Prioritize emergency triage: CRITICAL_RED_FLAG at top, then ALERT, then NORMAL
+    def triage_priority_key(v):
+        level = v.triage_level or "NORMAL"
+        if level == "CRITICAL_RED_FLAG":
+            return (0, -(v.created_at.timestamp() if v.created_at else 0))
+        elif level == "ALERT":
+            return (1, -(v.created_at.timestamp() if v.created_at else 0))
+        return (2, -(v.created_at.timestamp() if v.created_at else 0))
+
+    sorted_visits = sorted(visits, key=triage_priority_key)
+
     queue = []
-    for v in visits:
+    for v in sorted_visits:
         doc_count = db.query(Document).filter(Document.visit_id == v.id).count()
         patient_name = v.patient.name if v.patient else "Anonymous Patient"
+        level = v.triage_level or "NORMAL"
         queue.append(DoctorQueueItem(
             visit_id=v.id,
             patient_name=patient_name,
             chief_complaint=v.chief_complaint,
             status=v.status,
             created_at=v.created_at,
-            document_count=doc_count
+            document_count=doc_count,
+            triage_level=level,
+            triage_status=level,
+            red_flag_alert=(level == "CRITICAL_RED_FLAG")
         ))
     return queue
 
@@ -31,6 +47,7 @@ def get_patient_record(visit_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Visit not found")
 
     record = db.query(FinalRecord).filter(FinalRecord.visit_id == visit_id).first()
+    level = visit.triage_level or "NORMAL"
     
     return {
         "visit_id": visit.id,
@@ -42,6 +59,11 @@ def get_patient_record(visit_id: int, db: Session = Depends(get_db)):
             "language": visit.patient.language if visit.patient else "English"
         },
         "created_at": visit.created_at,
+        "socrates_state": visit.socrates_state,
+        "triage_level": level,
+        "triage_status": level,
+        "triage_message": visit.triage_message,
+        "red_flag_alert": (level == "CRITICAL_RED_FLAG"),
         "structured_record": record.structured_json if record else None,
         "approved_by_doctor": record.approved_by_doctor if record else False,
         "doctor_notes": record.doctor_notes if record else None

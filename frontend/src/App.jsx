@@ -32,6 +32,13 @@ export default function App() {
   const [uploadedDocs, setUploadedDocs] = useState([]);
   const [finalRecord, setFinalRecord] = useState(null);
 
+  // SOCRATES & Triage States
+  const [socratesState, setSocratesState] = useState(null);
+  const [redFlagAlert, setRedFlagAlert] = useState(false);
+  const [triageStatus, setTriageStatus] = useState('NORMAL');
+  const [triageMessage, setTriageMessage] = useState('');
+  const [canShorten, setCanShorten] = useState(false);
+
   // Doctor Portal States
   const [doctorQueue, setDoctorQueue] = useState([]);
   const [selectedDoctorVisitId, setSelectedDoctorVisitId] = useState(null);
@@ -71,6 +78,11 @@ export default function App() {
       setVisitId(res.visit_id);
       setCurrentQuestion(res.question);
       setQuestionId(res.question_id);
+      setSocratesState(res.socrates_state || null);
+      setRedFlagAlert(res.red_flag_alert || false);
+      setTriageStatus(res.triage_status || 'NORMAL');
+      setTriageMessage(res.message || '');
+      setCanShorten(res.can_shorten || false);
       setPatientStep(3); // Advance to Interview
     } catch (err) {
       console.error(err);
@@ -80,20 +92,30 @@ export default function App() {
     }
   };
 
-  const handleAnswerInterview = async (qId, answer) => {
+  const handleAnswerInterview = async (qId, answer, shorten = false) => {
     try {
       setIsLoading(true);
       setErrorMessage('');
       
       // Push to history
-      setQaHistory((prev) => [...prev, { question: currentQuestion, answer }]);
+      if (answer && answer.trim()) {
+        setQaHistory((prev) => [...prev, { question: currentQuestion, answer }]);
+      }
 
-      const res = await apiAnswerInterview(visitId, qId, answer);
-      if (res.status === 'in_progress' && res.next_question) {
+      const res = await apiAnswerInterview(visitId, qId, answer, shorten);
+      if (res.socrates_state) setSocratesState(res.socrates_state);
+      if (res.red_flag_alert !== undefined) setRedFlagAlert(res.red_flag_alert);
+      if (res.triage_status) setTriageStatus(res.triage_status);
+      if (res.message) setTriageMessage(res.message);
+      if (res.can_shorten !== undefined) setCanShorten(res.can_shorten);
+
+      if (res.is_complete || res.status === 'completed' || shorten || !res.next_question) {
+        // Section complete -> move to document upload
+        setPatientStep(4);
+      } else if (res.status === 'in_progress' && res.next_question) {
         setCurrentQuestion(res.next_question);
         setQuestionId(res.next_question_id);
       } else {
-        // Section complete -> move to document upload
         setPatientStep(4);
       }
     } catch (err) {
@@ -102,6 +124,10 @@ export default function App() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleShortenIntake = async () => {
+    await handleAnswerInterview(questionId, "Patient requested immediate emergency intake transfer.", true);
   };
 
   const handleUploadDoc = async (file) => {
@@ -262,6 +288,12 @@ export default function App() {
                 currentQuestion={currentQuestion}
                 questionId={questionId}
                 qaHistory={qaHistory}
+                socratesState={socratesState}
+                redFlagAlert={redFlagAlert}
+                triageStatus={triageStatus}
+                triageMessage={triageMessage}
+                canShorten={canShorten}
+                onShortenIntake={handleShortenIntake}
                 onAnswer={handleAnswerInterview}
                 onFinishInterview={() => setPatientStep(4)}
                 isLoading={isLoading}

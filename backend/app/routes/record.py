@@ -43,7 +43,8 @@ def finalize_record(payload: RecordFinalizeRequest, db: Session = Depends(get_db
         patient_name=patient_name,
         patient_language=patient_lang,
         interview_responses=interview_data,
-        documents=document_data
+        documents=document_data,
+        socrates_state=visit.socrates_state or {}
     )
 
     # Save to FinalRecord

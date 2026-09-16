@@ -1,12 +1,29 @@
 import React, { useState, useRef } from 'react';
 import { apiAnswerInterviewVoice } from '../api';
 
+const SOCRATES_SCHEMA = [
+  { key: 'site', alias: 'site', label: 'Site', letter: 'S' },
+  { key: 'onset', alias: 'onset', label: 'Onset', letter: 'O' },
+  { key: 'character', alias: 'character', label: 'Character', letter: 'C' },
+  { key: 'radiation', alias: 'radiation', label: 'Radiation', letter: 'R' },
+  { key: 'associated', alias: 'associated_symptoms', label: 'Associated', letter: 'A' },
+  { key: 'timing', alias: 'timing', label: 'Timing', letter: 'T' },
+  { key: 'exacerbating', alias: 'exacerbating_relieving', label: 'Factors', letter: 'E' },
+  { key: 'severity', alias: 'severity', label: 'Severity', letter: 'S' }
+];
+
 export default function AdaptiveInterview({
   visitId,
   selectedLanguage = 'English',
   currentQuestion,
   questionId,
   qaHistory,
+  socratesState,
+  redFlagAlert = false,
+  triageStatus = 'NORMAL',
+  triageMessage = '',
+  canShorten = false,
+  onShortenIntake,
   onAnswer,
   onFinishInterview,
   isLoading
@@ -102,11 +119,78 @@ export default function AdaptiveInterview({
     }
   };
 
-  const progressPercent = Math.min(((qaHistory.length + 1) / 5) * 100, 100);
+  const filledCount = SOCRATES_SCHEMA.filter(dim => {
+    const slot = socratesState?.[dim.key] || socratesState?.[dim.alias];
+    return slot && slot.value && slot.value !== 'Not reported' && slot.value !== 'None';
+  }).length;
+
+  const progressPercent = Math.max(
+    Math.min(((qaHistory.length + 1) / 5) * 100, 100),
+    Math.round((filledCount / 8) * 100)
+  );
 
   return (
     <div style={{ maxWidth: '720px', margin: '2rem auto' }}>
-      {/* Progress Header */}
+      {/* Emergency Red-Flag Circuit Breaker Alert Banner */}
+      {(redFlagAlert || triageStatus === 'CRITICAL_RED_FLAG') && (
+        <div style={{
+          background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.25), rgba(185, 28, 28, 0.35))',
+          border: '2px solid rgba(239, 68, 68, 0.8)',
+          borderRadius: 'var(--radius-md)',
+          padding: '1.25rem',
+          marginBottom: '1.5rem',
+          boxShadow: '0 0 24px rgba(239, 68, 68, 0.35)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
+            <span style={{ fontSize: '2rem' }}>🚨</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <strong style={{ color: '#fee2e2', fontSize: '1.1rem', letterSpacing: '0.3px' }}>
+                  EMERGENCY RED FLAG: Potential Acute Coronary Syndrome
+                </strong>
+                <span style={{
+                  background: '#ef4444',
+                  color: '#ffffff',
+                  fontSize: '0.72rem',
+                  padding: '0.2rem 0.6rem',
+                  borderRadius: '999px',
+                  fontWeight: 700,
+                  textTransform: 'uppercase'
+                }}>
+                  Emergency Triage Alert
+                </span>
+              </div>
+              <p style={{ color: '#fecaca', fontSize: '0.88rem', lineHeight: 1.45, marginBottom: '0.85rem' }}>
+                {triageMessage || 'High-risk cardiac presentation detected (crushing chest pain radiating to left arm/jaw with autonomic distress or severe pain >= 7). Clinical triage staff have been prioritized.'}
+              </p>
+              {canShorten && onShortenIntake && (
+                <button
+                  type="button"
+                  onClick={onShortenIntake}
+                  style={{
+                    background: '#dc2626',
+                    color: '#ffffff',
+                    border: '1px solid #f87171',
+                    padding: '0.55rem 1.1rem',
+                    borderRadius: 'var(--radius-md)',
+                    fontWeight: 700,
+                    fontSize: '0.9rem',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    boxShadow: '0 4px 12px rgba(220, 38, 38, 0.4)'
+                  }}
+                >
+                  ⚡ Expedite Intake — Move Immediately to Doctor Review →
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Progress & SOCRATES Header */}
       <div className="glass-card" style={{ marginBottom: '1.5rem', padding: '1.25rem 2rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--accent-cyan)' }}>
@@ -116,8 +200,78 @@ export default function AdaptiveInterview({
             {qaHistory.length} Answered
           </span>
         </div>
-        <div className="progress-bar-bg">
+        <div className="progress-bar-bg" style={{ marginTop: '0.6rem' }}>
           <div className="progress-bar-fill" style={{ width: `${progressPercent}%` }}></div>
+        </div>
+
+        {/* 8-Segment SOCRATES Protocol Coverage Bar */}
+        <div style={{ marginTop: '1rem', paddingTop: '0.85rem', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>
+              SOCRATES Clinical Protocol Tracker
+            </span>
+            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: filledCount >= 6 ? 'var(--accent-emerald)' : 'var(--accent-cyan)' }}>
+              {filledCount}/8 Dimensions Captured ({progressPercent}%)
+            </span>
+          </div>
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(8, 1fr)',
+            gap: '0.35rem'
+          }}>
+            {SOCRATES_SCHEMA.map((dim) => {
+              const slot = socratesState?.[dim.key] || socratesState?.[dim.alias];
+              const isFilled = Boolean(slot && slot.value && slot.value !== 'Not reported' && slot.value !== 'None');
+              const isAlert = slot?.status === 'alert';
+              const isUnclear = slot?.status === 'unclear';
+
+              let bg = 'rgba(30, 41, 59, 0.4)';
+              let border = '1px dashed rgba(148, 163, 184, 0.25)';
+              let color = '#64748b';
+              let icon = '○';
+
+              if (isAlert) {
+                bg = 'rgba(239, 68, 68, 0.2)';
+                border = '1px solid rgba(239, 68, 68, 0.6)';
+                color = '#fca5a5';
+                icon = '🚨';
+              } else if (isFilled) {
+                bg = 'rgba(16, 185, 129, 0.15)';
+                border = '1px solid rgba(16, 185, 129, 0.4)';
+                color = '#6ee7b7';
+                icon = '✓';
+              } else if (isUnclear) {
+                bg = 'rgba(245, 158, 11, 0.15)';
+                border = '1px solid rgba(245, 158, 11, 0.4)';
+                color = '#fcd34d';
+                icon = '~';
+              }
+
+              return (
+                <div
+                  key={dim.key}
+                  title={isFilled ? `${dim.label}: ${slot.value}` : `${dim.label} (unfilled)`}
+                  style={{
+                    background: bg,
+                    border: border,
+                    borderRadius: '6px',
+                    padding: '0.35rem 0.2rem',
+                    textAlign: 'center',
+                    transition: 'all 0.2s ease',
+                    cursor: 'default'
+                  }}
+                >
+                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: color }}>
+                    {icon} {dim.letter}
+                  </div>
+                  <div style={{ fontSize: '0.62rem', color: color, marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {dim.label}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 

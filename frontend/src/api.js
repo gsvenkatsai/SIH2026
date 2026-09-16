@@ -14,14 +14,15 @@ export async function apiStartInterview(chiefComplaint, patientName = "Anonymous
   return response.json();
 }
 
-export async function apiAnswerInterview(visitId, questionId, answer) {
+export async function apiAnswerInterview(visitId, questionId, answer, shortenIntake = false) {
   const response = await fetch(`${API_BASE_URL}/interview/answer`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       visit_id: visitId,
       question_id: questionId,
-      answer: answer
+      answer: answer,
+      shorten_intake: shortenIntake
     })
   });
   if (!response.ok) throw new Error("Failed to submit answer");

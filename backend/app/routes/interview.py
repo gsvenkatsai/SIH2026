@@ -9,8 +9,18 @@ from app.schemas import (
     InterviewAnswerResponse,
     InterviewVoiceAnswerResponse
 )
-from app.trees import DECISION_TREES, get_tree_key
-from app.groq_service import generate_interview_question, transcribe_audio
+from app.trees import (
+    DECISION_TREES,
+    get_tree_key,
+    get_empty_socrates_state,
+    select_next_question,
+    evaluate_cardiac_triage
+)
+from app.groq_service import (
+    generate_socrates_interview_question,
+    extract_socrates_slots,
+    transcribe_audio
+)
 
 router = APIRouter(prefix="/interview", tags=["Interview"])
 
@@ -25,11 +35,30 @@ def start_interview(payload: InterviewStartRequest, db: Session = Depends(get_db
     db.commit()
     db.refresh(patient)
 
-    # Create Visit record
+    # Initial SOCRATES slot extraction from patient's chief complaint
+    socrates_res = extract_socrates_slots(
+        chief_complaint=payload.chief_complaint,
+        history=[],
+        current_state=get_empty_socrates_state()
+    )
+    socrates_state = socrates_res.get("socrates", get_empty_socrates_state())
+    
+    # Deterministic Emergency Cardiac Red-Flag Circuit Breaker
+    triage_info = evaluate_cardiac_triage(socrates_state, text_corpus=payload.chief_complaint)
+    triage_level = triage_info["triage_level"]
+    triage_status = triage_info["triage_status"]
+    triage_message = triage_info["triage_message"]
+    red_flag_alert = triage_info["red_flag_alert"]
+    can_shorten = triage_info["can_shorten"]
+
+    # Create Visit record with initial SOCRATES profile & triage status
     visit = Visit(
         patient_id=patient.id,
         chief_complaint=payload.chief_complaint,
-        status="draft"
+        status="draft",
+        socrates_state=socrates_state,
+        triage_level=triage_level,
+        triage_message=triage_message
     )
     db.add(visit)
     db.commit()
@@ -39,14 +68,50 @@ def start_interview(payload: InterviewStartRequest, db: Session = Depends(get_db
     tree_key = get_tree_key(payload.chief_complaint)
     questions = DECISION_TREES.get(tree_key, DECISION_TREES["default"])
 
-    first_q_tree = questions[0]
-    groq_res = generate_interview_question(payload.chief_complaint, first_q_tree, history=[])
+    # Dynamic Priority Slot Resolver: Pick highest priority unfilled slot
+    next_tree_q = select_next_question(
+        tree_key=tree_key,
+        tree_questions=questions,
+        socrates_state=socrates_state,
+        answered_ids=[]
+    )
+
+    if not next_tree_q:
+        # Patient already answered all core slots in their chief complaint!
+        return InterviewStartResponse(
+            visit_id=visit.id,
+            question="Thank you. We have recorded your symptoms.",
+            question_id="complete",
+            section_completed=True,
+            socrates_state=socrates_state,
+            triage_level=triage_level,
+            triage_status=triage_status,
+            triage_message=triage_message,
+            red_flag_alert=red_flag_alert,
+            can_shorten=can_shorten
+        )
+
+    target_dim = next_tree_q.get("socrates_dimension", next_tree_q.get("category", "general"))
+    groq_res = generate_socrates_interview_question(
+        chief_complaint=payload.chief_complaint,
+        target_dimension=target_dim,
+        tree_question=next_tree_q,
+        history=[],
+        socrates_state=socrates_state,
+        language=payload.language or "English"
+    )
 
     return InterviewStartResponse(
         visit_id=visit.id,
         question=groq_res["question"],
         question_id=groq_res["question_id"],
-        section_completed=False
+        section_completed=False,
+        socrates_state=socrates_state,
+        triage_level=triage_level,
+        triage_status=triage_status,
+        triage_message=triage_message,
+        red_flag_alert=red_flag_alert,
+        can_shorten=can_shorten
     )
 
 @router.post("/answer", response_model=InterviewAnswerResponse)
@@ -58,8 +123,12 @@ def answer_interview(payload: InterviewAnswerRequest, db: Session = Depends(get_
     tree_key = get_tree_key(visit.chief_complaint)
     tree_questions = DECISION_TREES.get(tree_key, DECISION_TREES["default"])
 
-    current_q = next((q for q in tree_questions if q["id"] == payload.question_id), None)
-    question_text = current_q["question"] if current_q else payload.question_id
+    base_id = payload.question_id.replace("_clarify", "")
+    current_q = next((q for q in tree_questions if q["id"] in [payload.question_id, base_id]), None)
+    if current_q:
+        question_text = current_q.get("fallback_question", current_q["question"]) if payload.question_id.endswith("_clarify") else current_q["question"]
+    else:
+        question_text = payload.question_id
 
     # Store response
     response_entry = InterviewResponse(
@@ -71,32 +140,97 @@ def answer_interview(payload: InterviewAnswerRequest, db: Session = Depends(get_
     db.add(response_entry)
     db.commit()
 
-    # Build history for Groq
+    # Build dialogue history
     past_responses = db.query(InterviewResponse).filter(InterviewResponse.visit_id == visit.id).all()
     history = [{"question": r.question, "answer": r.answer} for r in past_responses]
     answered_ids = [r.question_id for r in past_responses]
 
-    # Find next question from decision tree
-    next_tree_q = None
-    for q in tree_questions:
-        if q["id"] not in answered_ids:
-            next_tree_q = q
-            break
+    # Dynamic Slot Extraction: Parse patient input into SOCRATES slots
+    current_state = visit.socrates_state if visit.socrates_state else get_empty_socrates_state()
+    socrates_res = extract_socrates_slots(
+        chief_complaint=visit.chief_complaint,
+        history=history,
+        current_state=current_state,
+        latest_input=payload.answer
+    )
+    updated_state = socrates_res.get("socrates", current_state)
+    
+    # Deterministic Emergency Cardiac Red-Flag Circuit Breaker
+    full_narrative = f"{visit.chief_complaint} {' '.join([r.answer for r in past_responses])}"
+    triage_info = evaluate_cardiac_triage(updated_state, text_corpus=full_narrative)
+    triage_level = triage_info["triage_level"]
+    triage_status = triage_info["triage_status"]
+    triage_message = triage_info["triage_message"]
+    red_flag_alert = triage_info["red_flag_alert"]
+    can_shorten = triage_info["can_shorten"]
+
+    # Persist updated state on Visit
+    visit.socrates_state = updated_state
+    visit.triage_level = triage_level
+    visit.triage_message = triage_message
+    db.commit()
+
+    # Emergency Circuit Breaker: If red flag alert triggered and patient/kiosk requests expedited review, shorten intake immediately
+    if red_flag_alert and (payload.shorten_intake or any(w in payload.answer.lower() for w in ["shorten", "expedite", "emergency", "doctor now", "urgent"])):
+        return InterviewAnswerResponse(
+            visit_id=visit.id,
+            status="section_complete",
+            is_complete=True,
+            next_question=None,
+            next_question_id=None,
+            socrates_state=updated_state,
+            triage_level=triage_level,
+            triage_status=triage_status,
+            triage_message=triage_message,
+            red_flag_alert=red_flag_alert,
+            can_shorten=can_shorten
+        )
+
+    # Priority Slot Resolver: Select next most diagnostically critical unfilled slot
+    next_tree_q = select_next_question(
+        tree_key=tree_key,
+        tree_questions=tree_questions,
+        socrates_state=updated_state,
+        answered_ids=answered_ids
+    )
+
+    patient_language = visit.patient.language if visit.patient else "English"
 
     if next_tree_q:
-        groq_res = generate_interview_question(visit.chief_complaint, next_tree_q, history=history)
+        target_dim = next_tree_q.get("socrates_dimension", next_tree_q.get("category", "general"))
+        groq_res = generate_socrates_interview_question(
+            chief_complaint=visit.chief_complaint,
+            target_dimension=target_dim,
+            tree_question=next_tree_q,
+            history=history,
+            socrates_state=updated_state,
+            language=patient_language
+        )
         return InterviewAnswerResponse(
             visit_id=visit.id,
             status="in_progress",
             next_question=groq_res["question"],
-            next_question_id=groq_res["question_id"]
+            next_question_id=groq_res["question_id"],
+            socrates_state=updated_state,
+            triage_level=triage_level,
+            triage_status=triage_status,
+            triage_message=triage_message,
+            red_flag_alert=red_flag_alert,
+            can_shorten=can_shorten
         )
     else:
         return InterviewAnswerResponse(
             visit_id=visit.id,
             status="section_complete",
+            is_complete=True,
             next_question=None,
-            next_question_id=None
+            next_question_id=None,
+            socrates_state=updated_state,
+            triage_level=triage_level,
+            triage_status=triage_status,
+            triage_message=triage_message,
+            red_flag_alert=red_flag_alert,
+            can_shorten=can_shorten
         )
 
 @router.post("/answer-voice", response_model=InterviewVoiceAnswerResponse)
@@ -122,10 +256,14 @@ async def answer_interview_voice(
     tree_key = get_tree_key(visit.chief_complaint)
     tree_questions = DECISION_TREES.get(tree_key, DECISION_TREES["default"])
 
-    current_q = next((q for q in tree_questions if q["id"] == question_id), None)
-    question_text = current_q["question"] if current_q else question_id
+    base_id = question_id.replace("_clarify", "")
+    current_q = next((q for q in tree_questions if q["id"] in [question_id, base_id]), None)
+    if current_q:
+        question_text = current_q.get("fallback_question", current_q["question"]) if question_id.endswith("_clarify") else current_q["question"]
+    else:
+        question_text = question_id
 
-    # Store response same as text answer
+    # Store response
     response_entry = InterviewResponse(
         visit_id=visit.id,
         question_id=question_id,
@@ -135,25 +273,84 @@ async def answer_interview_voice(
     db.add(response_entry)
     db.commit()
 
-    # Build history for Groq question generator
+    # Build dialogue history
     past_responses = db.query(InterviewResponse).filter(InterviewResponse.visit_id == visit.id).all()
     history = [{"question": r.question, "answer": r.answer} for r in past_responses]
     answered_ids = [r.question_id for r in past_responses]
 
-    next_tree_q = None
-    for q in tree_questions:
-        if q["id"] not in answered_ids:
-            next_tree_q = q
-            break
+    # Dynamic Slot Extraction: Parse transcript into SOCRATES slots
+    current_state = visit.socrates_state if visit.socrates_state else get_empty_socrates_state()
+    socrates_res = extract_socrates_slots(
+        chief_complaint=visit.chief_complaint,
+        history=history,
+        current_state=current_state,
+        latest_input=transcript
+    )
+    updated_state = socrates_res.get("socrates", current_state)
+    
+    # Deterministic Emergency Cardiac Red-Flag Circuit Breaker
+    full_narrative = f"{visit.chief_complaint} {' '.join([r.answer for r in past_responses])}"
+    triage_info = evaluate_cardiac_triage(updated_state, text_corpus=full_narrative)
+    triage_level = triage_info["triage_level"]
+    triage_status = triage_info["triage_status"]
+    triage_message = triage_info["triage_message"]
+    red_flag_alert = triage_info["red_flag_alert"]
+    can_shorten = triage_info["can_shorten"]
+
+    # Persist updated state on Visit
+    visit.socrates_state = updated_state
+    visit.triage_level = triage_level
+    visit.triage_message = triage_message
+    db.commit()
+
+    # Emergency Circuit Breaker: Check for verbal shorten requests when red flag is active
+    if red_flag_alert and any(w in transcript.lower() for w in ["shorten", "expedite", "emergency", "doctor now", "urgent", "call doctor"]):
+        return InterviewVoiceAnswerResponse(
+            visit_id=visit.id,
+            transcript=transcript,
+            status="section_complete",
+            next_question=None,
+            next_question_id=None,
+            socrates_state=updated_state,
+            triage_level=triage_level,
+            triage_status=triage_status,
+            triage_message=triage_message,
+            red_flag_alert=red_flag_alert,
+            can_shorten=can_shorten
+        )
+
+    # Priority Slot Resolver: Select next unfilled question
+    next_tree_q = select_next_question(
+        tree_key=tree_key,
+        tree_questions=tree_questions,
+        socrates_state=updated_state,
+        answered_ids=answered_ids
+    )
+
+    patient_language = visit.patient.language if visit.patient else "English"
 
     if next_tree_q:
-        groq_res = generate_interview_question(visit.chief_complaint, next_tree_q, history=history)
+        target_dim = next_tree_q.get("socrates_dimension", next_tree_q.get("category", "general"))
+        groq_res = generate_socrates_interview_question(
+            chief_complaint=visit.chief_complaint,
+            target_dimension=target_dim,
+            tree_question=next_tree_q,
+            history=history,
+            socrates_state=updated_state,
+            language=patient_language
+        )
         return InterviewVoiceAnswerResponse(
             visit_id=visit.id,
             transcript=transcript,
             status="in_progress",
             next_question=groq_res["question"],
-            next_question_id=groq_res["question_id"]
+            next_question_id=groq_res["question_id"],
+            socrates_state=updated_state,
+            triage_level=triage_level,
+            triage_status=triage_status,
+            triage_message=triage_message,
+            red_flag_alert=red_flag_alert,
+            can_shorten=can_shorten
         )
     else:
         return InterviewVoiceAnswerResponse(
@@ -161,5 +358,11 @@ async def answer_interview_voice(
             transcript=transcript,
             status="section_complete",
             next_question=None,
-            next_question_id=None
+            next_question_id=None,
+            socrates_state=updated_state,
+            triage_level=triage_level,
+            triage_status=triage_status,
+            triage_message=triage_message,
+            red_flag_alert=red_flag_alert,
+            can_shorten=can_shorten
         )
